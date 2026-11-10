@@ -720,7 +720,7 @@ const io = new IntersectionObserver(ents => {
 function layout(v) {
   const p = v.p, W = p.w * scale, H = (p.h + p.extra) * scale;
   v.el.style.width = W + "px"; v.el.style.height = H + "px";
-  const baseH = (p.kind === "pdf" ? p.h : p.h + p.extra) * scale;
+  const baseH = (p.h + p.extra) * scale;
   v.base.style.height = baseH + "px"; v.hl.style.height = H + "px"; v.ink.style.height = H + "px";
   layoutForms(v);
 }
@@ -755,7 +755,10 @@ function sizeCanvas(c, p, hPts, r) {
 }
 function drawPaper(ctx, p, H) {
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, p.w, H);
-  if (p.bg === "plain") return;
+  drawPattern(ctx, p, H);
+}
+function drawPattern(ctx, p, H) { // grid / lines / dots, on blank pages and on top of PDF pages
+  if (!p.bg || p.bg === "plain") return;
   ctx.lineWidth = .5;
   if (p.bg === "grid") {
     ctx.strokeStyle = "#cfdcef"; ctx.beginPath();
@@ -782,8 +785,11 @@ async function renderBase(v) {
   v.task = task;
   try { await task.promise; } catch (e) { return; }
   if (v.task !== task) return;
-  v.base.width = off.width; v.base.height = off.height;
-  v.base.getContext("2d").drawImage(off, 0, 0);
+  const k = off.width / p.w, H = p.h + p.extra;
+  v.base.width = off.width; v.base.height = Math.round(H * k);
+  const bx = v.base.getContext("2d"); bx.fillStyle = "#fff"; bx.fillRect(0, 0, v.base.width, v.base.height);
+  bx.drawImage(off, 0, 0);
+  if (p.bg && p.bg !== "plain") { bx.save(); bx.scale(k, k); bx.globalCompositeOperation = "multiply"; drawPattern(bx, p, H); bx.restore(); }
   v.task = null;
 }
 function drawInk(v, moving) {
@@ -1439,7 +1445,7 @@ async function openBytes(bytes, name, draft) {
 function fromSaved(saved, pdfPages) {
   return saved.pages.map(sp => {
     const strokes = (sp.strokes || []).map(s => ({ ...s, id: nid() }));
-    if (sp.kind === "pdf" && pdfPages[sp.pdfIndex]) return { ...pdfPages[sp.pdfIndex], id: nid(), extra: sp.extra || 0, rot: sp.rot || 0, strokes };
+    if (sp.kind === "pdf" && pdfPages[sp.pdfIndex]) return { ...pdfPages[sp.pdfIndex], id: nid(), extra: sp.extra || 0, rot: sp.rot || 0, bg: sp.bg, strokes };
     return { ...newBlank(sp.w, sp.h, sp.bg), extra: sp.extra || 0, strokes };
   });
 }
@@ -1525,6 +1531,13 @@ async function buildPdf() {
       if (p.bg === "lines") { const c = rgb(.76, .83, .93); for (let y = RULE * 3; y < H; y += RULE) line(0, y, p.w, y, c); line(56.7, 0, 56.7, H, rgb(.95, .72, .72)); }
     }
     const flip = (x, y) => { const q = map(x, y); return [q[0], -q[1]]; };
+    if (p.kind === "pdf" && p.bg && p.bg !== "plain") {
+      const H = p.h + p.extra, P = (x, y) => { const q = flip(x, y); return f(q[0]) + " " + f(q[1]); };
+      const strokePath = (d, c) => d && pg.drawSvgPath(d, { x: 0, y: 0, borderColor: c, borderWidth: .5, blendMode: BlendMode.Multiply });
+      if (p.bg === "grid") { let d = ""; for (let x = GRID; x < p.w; x += GRID) d += "M" + P(x, 0) + "L" + P(x, H); for (let y = GRID; y < H; y += GRID) d += "M" + P(0, y) + "L" + P(p.w, y); strokePath(d, rgb(.81, .86, .94)); }
+      if (p.bg === "lines") { let d = ""; for (let y = RULE * 3; y < H; y += RULE) d += "M" + P(0, y) + "L" + P(p.w, y); strokePath(d, rgb(.76, .83, .93)); strokePath("M" + P(56.7, 0) + "L" + P(56.7, H), rgb(.95, .72, .72)); }
+      if (p.bg === "dots") { let d = ""; for (let x = GRID; x < p.w; x += GRID) for (let y = GRID; y < H; y += GRID) d += "M" + P(x - .7, y - .7) + "L" + P(x + .7, y - .7) + "L" + P(x + .7, y + .7) + "L" + P(x - .7, y + .7) + "Z"; if (d) pg.drawSvgPath(d, { x: 0, y: 0, color: rgb(.66, .71, .8), blendMode: BlendMode.Multiply }); }
+    }
     for (const st of p.strokes.filter(s => s.tool === "hl" || s.tool === "thl"))
       pg.drawSvgPath(hlPath(st, flip), { x: 0, y: 0, color: hex(st.color), blendMode: BlendMode.Multiply });
     const o0 = map(0, 0), ux = map(1, 0), ang = Math.atan2(ux[1] - o0[1], ux[0] - o0[0]) * 180 / Math.PI;
@@ -1722,8 +1735,8 @@ $("bInsert").onclick = e => { const n = currentPageIndex() + 1; openMenu(e.curre
   { label: "Après la page " + n, run: () => insertBlank("after") },
   { label: "À la fin du document", run: () => insertBlank("end") },
   "-",
-  { hint: "Fond des pages blanches" + (pages[currentPageIndex()] && pages[currentPageIndex()].kind === "blank" ? " (s'applique aussi à cette page)" : "") },
-  ...[["plain", "Uni"], ["grid", "Quadrillé"], ["lines", "Ligné"], ["dots", "Pointillé"]].map(([k, l]) => ({ label: (prefs.bg === k ? "✓ " : "") + l, run: () => setBlankBg(k) })),
+  { hint: "Fond de cette page et des nouvelles pages blanches" },
+  ...[["plain", "Uni"], ["grid", "Quadrillé"], ["lines", "Ligné"], ["dots", "Pointillé"]].map(([k, l]) => ({ label: (((pages[currentPageIndex()] || {}).bg || "plain") === k ? "✓ " : "") + l, run: () => setBlankBg(k) })),
   "-",
   { label: "Pages d'un autre PDF, après la page " + n + "…", run: () => { mergeAt = currentPageIndex() + 1; $("mergeIn").click(); } },
   { label: "Pages d'un autre PDF, à la fin…", run: () => { mergeAt = pages.length; $("mergeIn").click(); } },
@@ -2552,8 +2565,8 @@ function movePage(p, to) {
 function setBlankBg(k) {
   prefs.bg = k; savePrefs();
   const p = pages[currentPageIndex()];
-  if (p && p.kind === "blank" && p.bg !== k) { pushHistory(); p.bg = k; syncDom(); refreshPside(); }
-  toast("Fond des nouvelles pages blanches : " + { plain: "uni", grid: "quadrillé", lines: "ligné", dots: "pointillé" }[k] + ".");
+  if (p && (p.bg || "plain") !== k) { pushHistory(); p.bg = k; dirty = true; markDirty(); syncDom(); refreshPside(); }
+  toast("Fond " + { plain: "uni", grid: "quadrillé", lines: "ligné", dots: "pointillé" }[k] + " : cette page et les nouvelles pages blanches.");
 }
 async function renderPageImage(p, W) { // page + ink into one canvas (thumbnails and PNG export)
   const k = W / p.w, H = Math.max(1, Math.round((p.h + p.extra) * k));
@@ -2562,6 +2575,7 @@ async function renderPageImage(p, W) { // page + ink into one canvas (thumbnails
   if (p.kind === "pdf") {
     const page = await pdfDoc.getPage(p.pdfIndex + 1);
     await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: k, rotation: (page.rotate + (p.rot || 0)) % 360 }), background: "#ffffff" }).promise;
+    if (p.bg && p.bg !== "plain") { ctx.save(); ctx.scale(k, k); ctx.globalCompositeOperation = "multiply"; drawPattern(ctx, p, p.h + p.extra); ctx.restore(); }
   } else { ctx.save(); ctx.scale(k, k); drawPaper(ctx, p, p.h + p.extra); ctx.restore(); }
   const hl = document.createElement("canvas"); hl.width = c.width; hl.height = H;
   const hx = hl.getContext("2d"); hx.scale(k, k); ctx.save(); ctx.scale(k, k);
