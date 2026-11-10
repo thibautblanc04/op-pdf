@@ -1,0 +1,19 @@
+{
+  "name": "OP PDF",
+  "short_name": "OP PDF",
+  "description": "Ouvrir, annoter et organiser des PDF au stylet, gratuitement.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e9eef7",
+  "theme_color": "#2f62e0",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "file_handlers": [
+    { "action": "./", "accept": { "application/pdf": [".pdf"] } }
+  ]
+}
