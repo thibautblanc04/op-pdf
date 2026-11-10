@@ -1,5 +1,5 @@
 // OP PDF: keeps the app and its two libraries available offline. Nothing is uploaded.
-const CACHE = "op-pdf-baa7f7447b";
+const CACHE = "op-pdf-b735088131";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",

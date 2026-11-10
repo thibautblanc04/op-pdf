@@ -897,10 +897,16 @@ function drawSelectionUI(off = [0, 0]) {
   if (off[0] || off[1]) return;
   // handles: resize (bottom right) and rotate (above)
   const hr = 6 / scale, cx = (b[0] + b[2]) / 2, ty = b[1] - 26 / scale;
-  ctx.save(); ctx.lineWidth = 1.4 / scale; ctx.strokeStyle = "#2b59c3"; ctx.fillStyle = "#fff";
+  ctx.save(); ctx.setLineDash([]); ctx.lineWidth = 1.4 / scale; ctx.strokeStyle = "#2b59c3"; ctx.fillStyle = "#fff";
   ctx.beginPath(); ctx.moveTo(cx, b[1]); ctx.lineTo(cx, ty + hr); ctx.stroke();
   for (const [hx, hy] of [[b[2], b[3]], [cx, ty]]) { ctx.beginPath(); ctx.arc(hx, hy, hr, 0, 7); ctx.fill(); ctx.stroke(); }
-  ctx.beginPath(); ctx.arc(cx, ty, hr * .45, -2.4, 1.6); ctx.stroke(); ctx.restore();
+  ctx.beginPath(); ctx.arc(cx, ty, hr * .45, -2.4, 1.6); ctx.stroke();
+  // side handles: stretch width or height only
+  const my = (b[1] + b[3]) / 2, sw = 5 / scale, sl = 12 / scale;
+  for (const [hx, hy, w, h] of [[b[2], my, sw, sl], [b[0], my, sw, sl], [cx, b[3], sl, sw], [cx, b[1], sl, sw]]) {
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(hx - w / 2, hy - h / 2, w, h, sw / 2); else ctx.rect(hx - w / 2, hy - h / 2, w, h); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
   selBar = document.createElement("div"); selBar.className = "selbar glass";
   selBar.innerHTML = '<button type="button" data-a="copy">Copier</button><button type="button" data-a="dup">Dupliquer</button><button type="button" data-a="front">Couleur active</button><button type="button" class="del" data-a="del">Supprimer</button>';
   selBar.style.left = Math.max(0, b[0] * scale) + "px"; selBar.style.top = Math.max(-34, b[1] * scale - 74) + "px";
@@ -914,16 +920,16 @@ function drawSelectionUI(off = [0, 0]) {
   });
   v.el.appendChild(selBar);
 }
-function xform(st, fn, k) { // apply a point map (scale/rotate) to any kind of stroke
+function xform(st, fn, k, kx = k, ky = k) { // apply a point map (scale/rotate) to any kind of stroke
   const o = { ...st, pts: st.pts.map(q => { const m = fn(q[0], q[1]); return [m[0], m[1], q[2]]; }) }; delete o.bb;
   if (st.tool === "note") { const c = fn(st.x + st.w / 2, st.y + st.h / 2); o.x = c[0] - st.w / 2; o.y = c[1] - st.h / 2; return o; }
   if (st.size) o.size = st.size * k;
-  if (st.x != null) { const c = fn(st.x + st.w / 2, st.y + st.h / 2); o.w = st.w * k; o.h = st.h * k; o.x = c[0] - o.w / 2; o.y = c[1] - o.h / 2; }
-  if (st.rects) o.rects = st.rects.map(([x, y, w, h]) => { const c = fn(x + w / 2, y + h / 2); return [c[0] - w * k / 2, c[1] - h * k / 2, w * k, h * k]; });
+  if (st.x != null) { const c = fn(st.x + st.w / 2, st.y + st.h / 2); o.w = st.w * kx; o.h = st.h * ky; o.x = c[0] - o.w / 2; o.y = c[1] - o.h / 2; }
+  if (st.rects) o.rects = st.rects.map(([x, y, w, h]) => { const c = fn(x + w / 2, y + h / 2); return [c[0] - w * kx / 2, c[1] - h * ky / 2, w * kx, h * ky]; });
   return o;
 }
 function selXform(g) {
-  if (g.t === "scale") { const [x0, y0] = g.b, k = g.k; return st => xform(st, (x, y) => [x0 + (x - x0) * k, y0 + (y - y0) * k], k); }
+  if (g.t === "scale") { const [x0, y0] = g.o, kx = g.kx, ky = g.ky; return st => xform(st, (x, y) => [x0 + (x - x0) * kx, y0 + (y - y0) * ky], g.ax === "xy" ? kx : 1, kx, ky); }
   const [cx, cy] = g.c, cs = Math.cos(g.ang), sn = Math.sin(g.ang);
   return st => xform(st, (x, y) => [cx + (x - cx) * cs - (y - cy) * sn, cy + (x - cx) * sn + (y - cy) * cs], 1);
 }
@@ -1023,7 +1029,12 @@ function attachPointer(v) {
     } else if (t === "lasso") {
       const b = selection && selection.pageId === v.p.id ? selBox() : null;
       const hr = 16 / scale;
-      if (b && Math.hypot(x - b[2], y - b[3]) < hr) g = { t: "scale", b, k: 1 };
+      const mx = (b ? (b[0] + b[2]) / 2 : 0), my = (b ? (b[1] + b[3]) / 2 : 0);
+      if (b && Math.hypot(x - b[2], y - b[3]) < hr) g = { t: "scale", b, ax: "xy", o: [b[0], b[1]], kx: 1, ky: 1 };
+      else if (b && Math.hypot(x - b[2], y - my) < hr) g = { t: "scale", b, ax: "r", o: [b[0], b[1]], kx: 1, ky: 1 };
+      else if (b && Math.hypot(x - b[0], y - my) < hr) g = { t: "scale", b, ax: "l", o: [b[2], b[1]], kx: 1, ky: 1 };
+      else if (b && Math.hypot(x - mx, y - b[3]) < hr) g = { t: "scale", b, ax: "b", o: [b[0], b[1]], kx: 1, ky: 1 };
+      else if (b && Math.hypot(x - mx, y - b[1]) < hr * .8) g = { t: "scale", b, ax: "t", o: [b[0], b[3]], kx: 1, ky: 1 };
       else if (b && Math.hypot(x - (b[0] + b[2]) / 2, y - (b[1] - 26 / scale)) < hr) g = { t: "rot", c: [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2], a0: Math.atan2(y - (b[1] + b[3]) / 2, x - (b[0] + b[2]) / 2), ang: 0 };
       else if (b && x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) g = { t: "move", sx: x, sy: y, dx: 0, dy: 0 };
       else { selection = null; drawSelectionUI(); g = { t: "lasso", poly: [[x, y]], rect: selCfg.mode === "rect" ? [x, y] : null }; }
@@ -1038,7 +1049,15 @@ function attachPointer(v) {
       const [x, y] = toPage(v, ev);
       if (g.t === "shape") { g.st.pts = shapePts(g.st.shape, g.a, [x, y], e.shiftKey, g.st.size); continue; }
       if (g.t === "laser") { laserAdd(v, x, y); continue; }
-      if (g.t === "scale") { const b = g.b; g.k = Math.max(.08, Math.hypot(x - b[0], y - b[1]) / Math.max(1, Math.hypot(b[2] - b[0], b[3] - b[1]))); continue; }
+      if (g.t === "scale") {
+        const b = g.b, W = Math.max(1, b[2] - b[0]), H = Math.max(1, b[3] - b[1]);
+        if (g.ax === "xy") { g.kx = g.ky = Math.max(.08, Math.hypot(x - b[0], y - b[1]) / Math.max(1, Math.hypot(W, H))); }
+        else if (g.ax === "r") g.kx = Math.max(.05, (x - b[0]) / W);
+        else if (g.ax === "l") g.kx = Math.max(.05, (b[2] - x) / W);
+        else if (g.ax === "b") g.ky = Math.max(.05, (y - b[1]) / H);
+        else if (g.ax === "t") g.ky = Math.max(.05, (b[3] - y) / H);
+        continue;
+      }
       if (g.t === "rot") { let a = Math.atan2(y - g.c[1], x - g.c[0]) - g.a0; if (e.shiftKey) a = Math.round(a / (Math.PI / 12)) * Math.PI / 12; g.ang = a; continue; }
       if (g.st) {
         if (g.st.shape) continue; // already turned into a shape: the stroke is done
@@ -1070,7 +1089,7 @@ function attachPointer(v) {
     if (G.t === "laser") return;
     if (G.t === "scale" || G.t === "rot") {
       const fn = selXform(G);
-      if (G.t === "rot" ? Math.abs(G.ang) > .005 : Math.abs(G.k - 1) > .005) { pushHistory(); v.p.strokes = v.p.strokes.map(s => selection && selection.ids.has(s.id) ? fn(s) : s); const sb = selBox(); if (sb) autoGrow(v.p, sb[3]); }
+      if (G.t === "rot" ? Math.abs(G.ang) > .005 : (Math.abs(G.kx - 1) > .005 || Math.abs(G.ky - 1) > .005)) { pushHistory(); v.p.strokes = v.p.strokes.map(s => selection && selection.ids.has(s.id) ? fn(s) : s); const sb = selBox(); if (sb) autoGrow(v.p, sb[3]); }
       drawInk(v); drawSelectionUI(); return;
     }
     if (G.st && G.t === "shape") { const b = bbox({ pts: G.st.pts, size: 0 }); if (b[2] - b[0] + b[3] - b[1] < 4) { clearUI(v); return; } }
