@@ -1458,9 +1458,12 @@ let fileHandle = null; // File System Access handle when the browser allows savi
 async function pickFile() {
   if (window.showOpenFilePicker) {
     try {
-      const [h] = await window.showOpenFilePicker({ ...(workDir ? { startIn: workDir } : {}), types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }] });
+      const opts = { types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }] };
+      let h;
+      try { [h] = await window.showOpenFilePicker({ ...opts, ...(workDir ? { startIn: workDir } : {}) }); }
+      catch (e) { if (e && e.name === "AbortError") return; [h] = await window.showOpenFilePicker(opts); } // stale working folder: open without it
       return loadFile(await h.getFile(), h);
-    } catch (e) { if (e && e.name === "AbortError") return; }
+    } catch (e) { if (e && e.name === "AbortError") return; console.warn("open picker", e); }
   }
   $("fileIn").click();
 }
@@ -1602,7 +1605,10 @@ async function save(mode = "save") {
     const bytes = mode === "flat" ? await buildFlat() : await buildPdf();
     const base = docName.replace(/\.pdf$/i, "") || "document";
     let ok = false, name = base + (mode === "flat" ? "-aplati" : "") + ".pdf";
-    if (mode === "save" && !fileHandle && window.showSaveFilePicker) mode = "saveas"; // location unknown (guide, new document): ask once, then saves go straight there
+    if (mode === "save" && !fileHandle && window.showSaveFilePicker) { // location unknown (guide, new document): ask once, then saves go straight there
+      mode = "saveas"; if (origBytes) toast("Emplacement d'origine inconnu pour ce fichier : choisissez-le une fois, ensuite « Enregistrer » écrira directement dedans.");
+    }
+    if (!window.showSaveFilePicker && mode !== "flat") toast("Ce navigateur ne permet pas d'enregistrer dans le fichier d'origine. Utilisez Edge ou Chrome (l'app installée).");
     if (mode === "save" && fileHandle) {
       try { ok = await writeHandle(fileHandle, bytes); } catch (e) { ok = false; }
       if (!ok) toast("Impossible d'écrire dans le fichier d'origine. Utilisez « Enregistrer sous ».");
@@ -1610,7 +1616,7 @@ async function save(mode = "save") {
     } else if (mode === "saveas" && window.showSaveFilePicker) {
       try {
         const h = await window.showSaveFilePicker({ suggestedName: name, ...(workDir ? { startIn: workDir } : {}), types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }] });
-        ok = await writeHandle(h, bytes); if (ok) { fileHandle = h; name = h.name; docName = h.name; $("docName").textContent = docName; }
+        ok = await writeHandle(h, bytes); if (ok) { fileHandle = h; name = h.name; docName = h.name; $("docName").textContent = docName; if (!currentId) currentId = "d" + Date.now(); renderTabs(); }
       } catch (e) { if (e && e.name === "AbortError") return false; ok = await download(bytes, name); }
     } else ok = await download(bytes, name);
     if (!ok) return false;
