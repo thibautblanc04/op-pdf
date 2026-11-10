@@ -710,7 +710,7 @@ function makeView(p) {
   if (p.kind === "pdf") buildForms(v);
   return v;
 }
-const vkey = p => [scale, p.extra, p.w, p.h, p.rot || 0, p.bg || ""].join(":");
+const vkey = p => [scale, p.extra, p.w, p.h, p.rot || 0, prefs.bg || ""].join(":");
 function newBlank(w = 595.28, h = 841.89, bg = "grid") { return { id: nid(), kind: "blank", w, h, extra: 0, bg, strokes: [] }; }
 
 const io = new IntersectionObserver(ents => {
@@ -754,23 +754,23 @@ function sizeCanvas(c, p, hPts, r) {
   const ctx = c.getContext("2d"); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H);
   ctx.setTransform(scale * r, 0, 0, scale * r, 0, 0); return ctx;
 }
-function drawPaper(ctx, p, H) {
+function drawPaper(ctx, p, H, pattern = true) {
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, p.w, H);
-  drawPattern(ctx, p, H);
+  if (pattern) drawPattern(ctx, p, H);
 }
-function drawPattern(ctx, p, H) { // grid / lines / dots, on blank pages and on top of PDF pages
-  if (!p.bg || p.bg === "plain") return;
+function drawPattern(ctx, p, H) { // Affichage › Fond de page: screen only, never written into the PDF
+  const bg = prefs.bg; if (!bg || bg === "plain") return;
   ctx.lineWidth = .5;
-  if (p.bg === "grid") {
+  if (bg === "grid") {
     ctx.strokeStyle = "#cfdcef"; ctx.beginPath();
     for (let x = GRID; x < p.w; x += GRID) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
     for (let y = GRID; y < H; y += GRID) { ctx.moveTo(0, y); ctx.lineTo(p.w, y); }
     ctx.stroke();
-  } else if (p.bg === "lines") {
+  } else if (bg === "lines") {
     ctx.strokeStyle = "#c3d3ec"; ctx.beginPath();
     for (let y = RULE * 3; y < H; y += RULE) { ctx.moveTo(0, y); ctx.lineTo(p.w, y); }
     ctx.stroke(); ctx.strokeStyle = "#f2b8b8"; ctx.beginPath(); ctx.moveTo(56.7, 0); ctx.lineTo(56.7, H); ctx.stroke();
-  } else if (p.bg === "dots") {
+  } else if (bg === "dots") {
     ctx.fillStyle = "#a9b6cc";
     for (let x = GRID; x < p.w; x += GRID) for (let y = GRID; y < H; y += GRID) { ctx.beginPath(); ctx.arc(x, y, .75, 0, 7); ctx.fill(); }
   }
@@ -790,7 +790,7 @@ async function renderBase(v) {
   v.base.width = off.width; v.base.height = Math.round(H * k);
   const bx = v.base.getContext("2d"); bx.fillStyle = "#fff"; bx.fillRect(0, 0, v.base.width, v.base.height);
   bx.drawImage(off, 0, 0);
-  if (p.bg && p.bg !== "plain") { bx.save(); bx.scale(k, k); bx.globalCompositeOperation = "multiply"; drawPattern(bx, p, H); bx.restore(); }
+  if (prefs.bg && prefs.bg !== "plain") { bx.save(); bx.scale(k, k); bx.globalCompositeOperation = "multiply"; drawPattern(bx, p, H); bx.restore(); }
   v.task = null;
 }
 function drawInk(v, moving) {
@@ -1527,18 +1527,8 @@ async function buildPdf() {
     } else {
       const H = p.h + p.extra; pg = out.addPage([p.w, H]); map = (x, y) => [x, H - y];
       const line = (x1, y1, x2, y2, col) => pg.drawLine({ start: { x: x1, y: H - y1 }, end: { x: x2, y: H - y2 }, thickness: .5, color: col });
-      if (p.bg === "grid") { const c = rgb(.81, .86, .94); for (let x = GRID; x < p.w; x += GRID) line(x, 0, x, H, c); for (let y = GRID; y < H; y += GRID) line(0, y, p.w, y, c); }
-      if (p.bg === "dots") { const c = rgb(.66, .71, .8); for (let x = GRID; x < p.w; x += GRID) for (let y = GRID; y < H; y += GRID) pg.drawCircle({ x, y: H - y, size: .75, color: c }); }
-      if (p.bg === "lines") { const c = rgb(.76, .83, .93); for (let y = RULE * 3; y < H; y += RULE) line(0, y, p.w, y, c); line(56.7, 0, 56.7, H, rgb(.95, .72, .72)); }
     }
     const flip = (x, y) => { const q = map(x, y); return [q[0], -q[1]]; };
-    if (p.kind === "pdf" && p.bg && p.bg !== "plain") {
-      const H = p.h + p.extra, P = (x, y) => { const q = flip(x, y); return f(q[0]) + " " + f(q[1]); };
-      const strokePath = (d, c) => d && pg.drawSvgPath(d, { x: 0, y: 0, borderColor: c, borderWidth: .5, blendMode: BlendMode.Multiply });
-      if (p.bg === "grid") { let d = ""; for (let x = GRID; x < p.w; x += GRID) d += "M" + P(x, 0) + "L" + P(x, H); for (let y = GRID; y < H; y += GRID) d += "M" + P(0, y) + "L" + P(p.w, y); strokePath(d, rgb(.81, .86, .94)); }
-      if (p.bg === "lines") { let d = ""; for (let y = RULE * 3; y < H; y += RULE) d += "M" + P(0, y) + "L" + P(p.w, y); strokePath(d, rgb(.76, .83, .93)); strokePath("M" + P(56.7, 0) + "L" + P(56.7, H), rgb(.95, .72, .72)); }
-      if (p.bg === "dots") { let d = ""; for (let x = GRID; x < p.w; x += GRID) for (let y = GRID; y < H; y += GRID) d += "M" + P(x - .7, y - .7) + "L" + P(x + .7, y - .7) + "L" + P(x + .7, y + .7) + "L" + P(x - .7, y + .7) + "Z"; if (d) pg.drawSvgPath(d, { x: 0, y: 0, color: rgb(.66, .71, .8), blendMode: BlendMode.Multiply }); }
-    }
     for (const st of p.strokes.filter(s => s.tool === "hl" || s.tool === "thl"))
       pg.drawSvgPath(hlPath(st, flip), { x: 0, y: 0, color: hex(st.color), blendMode: BlendMode.Multiply });
     const o0 = map(0, 0), ux = map(1, 0), ang = Math.atan2(ux[1] - o0[1], ux[0] - o0[0]) * 180 / Math.PI;
@@ -1736,9 +1726,6 @@ $("bInsert").onclick = e => { const n = currentPageIndex() + 1; openMenu(e.curre
   { label: "Après la page " + n, run: () => insertBlank("after") },
   { label: "À la fin du document", run: () => insertBlank("end") },
   "-",
-  { hint: "Fond de cette page et des nouvelles pages blanches" },
-  ...[["plain", "Uni"], ["grid", "Quadrillé"], ["lines", "Ligné"], ["dots", "Pointillé"]].map(([k, l]) => ({ label: (((pages[currentPageIndex()] || {}).bg || "plain") === k ? "✓ " : "") + l, run: () => setBlankBg(k) })),
-  "-",
   { label: "Pages d'un autre PDF, après la page " + n + "…", run: () => { mergeAt = currentPageIndex() + 1; $("mergeIn").click(); } },
   { label: "Pages d'un autre PDF, à la fin…", run: () => { mergeAt = pages.length; $("mergeIn").click(); } },
   "-",
@@ -1762,6 +1749,10 @@ $("bView").onclick = e => openMenu(e.currentTarget, [
   { label: "Replacer la barre d'outils en bas", run: () => { const v = dockPos && dockPos.v; dockPos = null; placeDockDefault(); dockPos.v = v; clampDock(); store.set("carnet-dock", JSON.stringify(dockPos)); } },
   "-",
   { label: (fingerDraw ? "✓ " : "") + "Dessiner au doigt (écran tactile)", run: () => { fingerDraw = !fingerDraw; prefs.finger = fingerDraw; savePrefs(); applyBodyClasses(); } },
+  "-",
+  { hint: "Fond de page (non enregistré dans le PDF)" },
+  ...[["plain", "Uni"], ["grid", "Quadrillé"], ["lines", "Ligné"], ["dots", "Pointillé"]].map(([k, l]) => ({ label: ((prefs.bg || "plain") === k ? "✓ " : "") + l, run: () => setViewBg(k) })),
+  "-",
   { label: (prefs.night ? "✓ " : "") + "Lecture de nuit (pages sombres)", run: () => { prefs.night = !prefs.night; savePrefs(); applyBodyClasses(); } },
   "-",
   { label: "Boutons du stylet…", run: openPenPanel },
@@ -2592,11 +2583,9 @@ function movePage(p, to) {
   const i = pages.indexOf(p); if (i < 0 || to === i || to === i + 1) return;
   pushHistory(); pages.splice(i, 1); pages.splice(to > i ? to - 1 : to, 0, p); syncDom(); refreshPside();
 }
-function setBlankBg(k) {
-  prefs.bg = k; savePrefs();
-  const p = pages[currentPageIndex()];
-  if (p && (p.bg || "plain") !== k) { pushHistory(); p.bg = k; dirty = true; markDirty(); syncDom(); refreshPside(); }
-  toast("Fond " + { plain: "uni", grid: "quadrillé", lines: "ligné", dots: "pointillé" }[k] + " : cette page et les nouvelles pages blanches.");
+function setViewBg(k) {
+  prefs.bg = k; savePrefs(); syncDom(); refreshPside();
+  toast("Fond de page : " + { plain: "uni", grid: "quadrillé", lines: "ligné", dots: "pointillé" }[k] + " (affichage seulement).");
 }
 async function renderPageImage(p, W) { // page + ink into one canvas (thumbnails and PNG export)
   const k = W / p.w, H = Math.max(1, Math.round((p.h + p.extra) * k));
@@ -2605,8 +2594,7 @@ async function renderPageImage(p, W) { // page + ink into one canvas (thumbnails
   if (p.kind === "pdf") {
     const page = await pdfDoc.getPage(p.pdfIndex + 1);
     await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: k, rotation: (page.rotate + (p.rot || 0)) % 360 }), background: "#ffffff" }).promise;
-    if (p.bg && p.bg !== "plain") { ctx.save(); ctx.scale(k, k); ctx.globalCompositeOperation = "multiply"; drawPattern(ctx, p, p.h + p.extra); ctx.restore(); }
-  } else { ctx.save(); ctx.scale(k, k); drawPaper(ctx, p, p.h + p.extra); ctx.restore(); }
+  } else { ctx.save(); ctx.scale(k, k); drawPaper(ctx, p, p.h + p.extra, false); ctx.restore(); }
   const hl = document.createElement("canvas"); hl.width = c.width; hl.height = H;
   const hx = hl.getContext("2d"); hx.scale(k, k); ctx.save(); ctx.scale(k, k);
   for (const st of p.strokes) paintStroke(st.tool === "hl" || st.tool === "thl" ? hx : ctx, st);
@@ -2692,7 +2680,7 @@ function openPside() {
 function closePside() { if (!pside) return; pside.remove(); pside = null; $("bPages").setAttribute("aria-pressed", "false"); applyBodyClasses(); fitWidth(); }
 function refreshPside() { if (!pside) return; clearTimeout(psideT); psideT = setTimeout(renderPside, 250); }
 const arrIds = new WeakMap(); let arrN = 0;
-const thumbKey = p => [p.w, p.h, p.extra, p.rot || 0, p.bg || "", arrIds.get(p.strokes) || (arrIds.set(p.strokes, ++arrN), arrN)].join(",");
+const thumbKey = p => [p.w, p.h, p.extra, p.rot || 0, prefs.bg || "", arrIds.get(p.strokes) || (arrIds.set(p.strokes, ++arrN), arrN)].join(",");
 let dragPage = null;
 function renderPside() {
   if (!pside) return;
