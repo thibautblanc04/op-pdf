@@ -1612,7 +1612,7 @@ async function save(mode = "save") {
     if (mode === "save" && !fileHandle && window.showSaveFilePicker) { // location unknown (guide, new document): ask once, then saves go straight there
       mode = "saveas"; if (origBytes) toast("Emplacement d'origine inconnu pour ce fichier : choisissez-le une fois, ensuite « Enregistrer » écrira directement dedans.");
     }
-    if (!window.showSaveFilePicker && mode !== "flat") toast("Ce navigateur ne permet pas d'enregistrer dans le fichier d'origine. Utilisez Edge ou Chrome (l'app installée).");
+    if (!window.showSaveFilePicker && mode !== "flat") toast(navigator.brave ? "Brave bloque l'enregistrement dans le fichier d'origine. Activez brave://flags/#file-system-access-api (Enabled), puis relancez Brave." : "Ce navigateur ne permet pas d'enregistrer dans le fichier d'origine. Utilisez Edge ou Chrome (l'app installée).");
     if (mode === "save" && fileHandle) {
       try { ok = await writeHandle(fileHandle, bytes); } catch (e) { ok = false; }
       if (!ok) toast("Impossible d'écrire dans le fichier d'origine. Utilisez « Enregistrer sous ».");
