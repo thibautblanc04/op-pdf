@@ -315,6 +315,40 @@ body.tool-text .forms .ff,body.tool-hand .forms .ff{pointer-events:auto}
 .home{position:fixed;inset:0;z-index:4;overflow:auto;
   padding-top:calc(96px + env(safe-area-inset-top,0px));padding-bottom:48px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+/* tips carousel (home) */
+.tipwrap{position:relative}
+.tips{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none;padding:4px 4px 22px;margin:-4px -4px -16px}
+.tips::-webkit-scrollbar{display:none}
+.tip{flex:0 0 min(280px,78vw);scroll-snap-align:start;position:relative;border-radius:22px;padding:14px 40px 14px 14px;display:flex;gap:12px;align-items:flex-start;cursor:pointer;text-align:left;border:1px solid var(--glass-edge);color:var(--ink);font:inherit;transition:transform .15s}
+.tip:hover{transform:translateY(-2px)}
+.tip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tip .ic{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.tip.warn .ic{background:#ffb02033;color:#c77700}
+.tip .ic svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tip b{display:block;font-size:13.5px;margin-bottom:3px}
+.tip small{display:block;font-size:12px;color:var(--muted);line-height:1.4}
+.tip .tx{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.tip .tx:hover{background:rgba(127,127,127,.2)}
+.tip .tx svg{width:11px;height:11px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round}
+.tipnav{display:flex;gap:6px;position:absolute;right:0;top:-40px}
+.tipnav button{width:30px;height:30px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;color:var(--ink)}
+.tipnav svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.panel ol{margin:0 0 12px;padding-left:20px;font-size:13px;line-height:1.55}
+.panel ol li{margin:3px 0}
+.panel code{font-family:var(--f-mono);font-size:12px;background:var(--accent-soft);padding:1px 6px;border-radius:6px;user-select:all}
+.panel h3{margin:12px 0 4px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+/* trust screen shown just before the browser's file permission prompt */
+.trust{position:fixed;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:rgba(20,28,48,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.trust .card{width:min(560px,100%);border-radius:32px;padding:30px 28px 22px;text-align:center;background:var(--glass-strong)}
+.trust .shield{width:84px;height:84px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);box-shadow:0 10px 30px rgba(47,98,224,.35)}
+.trust .shield svg{width:44px;height:44px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.trust h2{margin:0 0 8px;font-size:clamp(20px,3.2vw,26px);letter-spacing:-.02em;text-wrap:balance}
+.trust .fname{font-weight:700;color:var(--accent);word-break:break-word}
+.trust ul{list-style:none;margin:16px 0 18px;padding:0;text-align:left;display:grid;gap:10px}
+.trust li{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45}
+.trust li svg{flex:none;width:20px;height:20px;margin-top:1px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.trust .acts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.trust .acts .btn{height:44px;padding:0 22px;font-size:15px}
 .home-in{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
 .home h1{margin:0;font-size:clamp(26px,4vw,38px);font-weight:700;letter-spacing:-.025em;text-wrap:balance}
 .home h1 + p{margin:6px 0 0;color:var(--muted);font-size:14.5px}
@@ -369,6 +403,11 @@ body.at-home .desk,body.at-home .dock,body.at-home .view-only{display:none!impor
         <button type="button" class="start glass" data-start="guide"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.5V14M12 17.2v.1"/></svg></span><b>Guide de prise en main</b><span>Un PDF d'exemple déjà annoté.</span></button>
         <button type="button" class="start glass" data-start="new"><span class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M12 11v6M9 14h6"/></svg></span><b>Nouveau PDF vide</b><span>Une page blanche pour écrire, à enregistrer en PDF.</span></button>
       </div>
+    </div>
+    <div id="tipSec" hidden>
+      <h2>Conseils</h2>
+      <div class="tipwrap"><div class="tipnav"><button type="button" class="glass" id="tipPrev" aria-label="Conseil précédent"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><button type="button" class="glass" id="tipNext" aria-label="Conseil suivant"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>
+      <div class="tips" id="tips"></div></div>
     </div>
     <div>
       <h2>Dossier de travail</h2>
@@ -1604,7 +1643,8 @@ async function save(mode = "save") {
   const btn = $("bSave"); btn.disabled = true;
   try {
     if (mode === "save" && fileHandle && fileHandle.queryPermission) {
-      try { if ((await fileHandle.queryPermission({ mode: "readwrite" })) !== "granted") await fileHandle.requestPermission({ mode: "readwrite" }); } catch (e) {}
+      let st = "granted"; try { st = await fileHandle.queryPermission({ mode: "readwrite" }); } catch (e) {}
+      if (st !== "granted" && !(await trustPrompt(fileHandle))) return false;
     }
     const bytes = mode === "flat" ? await buildFlat() : await buildPdf();
     const base = docName.replace(/\.pdf$/i, "") || "document";
@@ -2155,6 +2195,114 @@ function switchTab(t, force) {
   updateUndo(); if (home) hideHome(true); $("docName").textContent = docName; markDirty();
   syncDom(); requestAnimationFrame(() => { desk.scrollTop = t.st || 0; desk.scrollLeft = t.sl || 0; updatePageLbl(); });
   refreshPside(); renderTabs();
+}
+/* ---------- trust screen: explains the browser's "this site can edit the file" warning before it appears ---------- */
+const CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function trustPrompt(h) {
+  return new Promise(res => {
+    const w = document.createElement("div"); w.className = "trust"; w.setAttribute("role", "dialog"); w.setAttribute("aria-modal", "true");
+    w.innerHTML = `<div class="card glass">
+      <div class="shield"><svg viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></div>
+      <h2>OP PDF va enregistrer dans<br><span class="fname"></span></h2>
+      <ul>
+        <li>${CHECK}<span>Votre fichier reste <b>sur votre ordinateur</b>. OP PDF n'envoie rien sur Internet, aucun compte, aucun serveur.</span></li>
+        <li>${CHECK}<span>Le navigateur va afficher un <b>avertissement standard</b> : il le montre pour toute application web qui modifie un fichier. C'est normal.</span></li>
+        <li>${CHECK}<span>Choisissez <b>« Autoriser »</b> (ou « Autoriser à chaque visite » s'il est proposé) : OP PDF écrira alors directement dans ce fichier, sans vous redemander d'emplacement.</span></li>
+      </ul>
+      <div class="acts"><button type="button" class="btn" data-a="no">Annuler</button><button type="button" class="btn primary" data-a="ok">Continuer</button></div></div>`;
+    w.querySelector(".fname").textContent = "« " + (h.name || docName) + " »";
+    w.onclick = async e => {
+      const a = e.target.closest("[data-a]"); if (!a) return;
+      w.remove();
+      if (a.dataset.a !== "ok") return res(false);
+      let st = "denied"; try { st = await h.requestPermission({ mode: "readwrite" }); } catch (err) {}
+      if (st !== "granted") toast("Autorisation refusée : le fichier n'a pas été modifié. Utilisez « Enregistrer sous » pour choisir un autre fichier.");
+      res(st === "granted");
+    };
+    document.body.appendChild(w); w.querySelector('[data-a="ok"]').focus();
+  });
+}
+
+/* ---------- tips carousel on the home screen ---------- */
+const IC = {
+  shield: '<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M12 8v5M12 16v.1"/>',
+  install: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v7M8.5 11.5L12 15l3.5-3.5"/>',
+  pdf: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 14h6M9 17h4"/>',
+  folder: '<path d="M3 7h6l2 2h10v10H3z"/><path d="M12 12v4M10 14h4"/>',
+  pen: '<path d="M15 4l5 5L9 20H4v-5z"/><path d="M13 6l5 5"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  key: '<rect x="3" y="7" width="18" height="11" rx="2.5"/><path d="M7 11h.1M11 11h.1M15 11h.1M8 14.5h8"/>',
+  ok: '<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
+};
+function tipList() {
+  const fsa = !!window.showSaveFilePicker, brave = !!navigator.brave;
+  const installed = (() => { try { return matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: window-controls-overlay)").matches; } catch (e) { return false; } })();
+  const T = [];
+  if (brave && !fsa) T.push({ id: "brave", warn: true, ic: IC.shield, t: "Utilisateurs de Brave : activez l'enregistrement direct", s: "Sinon chaque enregistrement devient un téléchargement.",
+    why: "Brave désactive par défaut la fonction qui permet à une application web d'écrire dans un fichier de votre ordinateur. Sans elle, OP PDF ne peut pas enregistrer dans le PDF d'origine : il doit le télécharger comme une nouvelle copie, et le dossier de travail OneDrive ou Drive ne fonctionne pas.",
+    steps: ["Copiez cette adresse et collez-la dans la barre d'adresse de Brave : <code>brave://flags/#file-system-access-api</code>", "Passez l'option « File System Access API » sur <b>Enabled</b>.", "Cliquez sur <b>Relaunch</b> en bas de la page.", "Rouvrez votre PDF : « Enregistrer » écrit maintenant directement dans le fichier."], copy: "brave://flags/#file-system-access-api" });
+  else if (!fsa) T.push({ id: "browser", warn: true, ic: IC.shield, t: "Pour enregistrer dans le fichier d'origine", s: "Utilisez Edge, Chrome ou Brave (avec un réglage).",
+    why: "Ce navigateur ne permet pas à une application web d'écrire dans un fichier de votre ordinateur. OP PDF télécharge donc une nouvelle copie à chaque enregistrement.",
+    steps: ["Ouvrez OP PDF dans Microsoft Edge ou Google Chrome.", "Installez-le avec l'icône « Installer » de la barre d'adresse."] });
+  if (!installed) T.push({ id: "install", ic: IC.install, t: "Installez OP PDF comme une application", s: "Sa propre fenêtre, son icône, et il marche hors ligne.",
+    why: "Installé, OP PDF s'ouvre dans sa propre fenêtre sans barre de navigateur, apparaît dans le menu Démarrer, fonctionne sans Internet et peut ouvrir directement les PDF depuis l'Explorateur.",
+    steps: ["Dans la barre d'adresse, cliquez sur l'icône <b>Installer</b> (un petit écran avec une flèche), ou ouvrez le menu du navigateur › <b>Installer OP PDF</b>.", "Confirmez avec <b>Installer</b>."] });
+  T.push({ id: "default", ic: IC.pdf, t: "Ouvrez vos PDF avec OP PDF par défaut", s: "Un double-clic sur un PDF l'ouvre directement ici.",
+    why: "Une fois OP PDF choisi comme application par défaut, tout PDF ouvert depuis l'Explorateur, un e-mail ou un téléchargement arrive directement dans OP PDF. Il garde aussi l'emplacement du fichier, et « Enregistrer » écrit dedans sans rien demander.",
+    steps: ["Installez d'abord OP PDF (voir le conseil « Installez OP PDF »).", "Dans l'Explorateur Windows, faites un clic droit sur un PDF › <b>Ouvrir avec</b> › <b>Choisir une autre application</b>.", "Choisissez <b>OP PDF</b>, puis cliquez sur <b>Toujours</b>.", "Autre chemin : Paramètres Windows › Applications › Applications par défaut › tapez « .pdf » et choisissez OP PDF."] });
+  if (fsa) T.push({ id: "allow", ic: IC.ok, t: "« Autoriser à chaque visite »", s: "Pour ne plus voir l'avertissement du navigateur.",
+    why: "La première fois que vous enregistrez un fichier, le navigateur demande si OP PDF peut le modifier. C'est une protection normale, affichée pour toute application web. Vos fichiers restent sur votre ordinateur.",
+    steps: ["Quand l'avertissement apparaît, choisissez <b>Autoriser à chaque visite</b> si cette option est proposée (sinon <b>Autoriser</b>).", "Dans l'app installée, l'autorisation est en général gardée d'une fois à l'autre."] });
+  if (fsa) T.push({ id: "folder", ic: IC.folder, t: "Un dossier OneDrive ou Google Drive", s: "Vos PDF synchronisés, sans rien envoyer en ligne depuis OP PDF.",
+    why: "OP PDF n'a pas de stockage en ligne. Si vous choisissez votre dossier OneDrive ou Google Drive comme dossier de travail, ses PDF s'affichent sur l'accueil et s'enregistrent directement dedans. C'est l'application OneDrive ou Drive de l'ordinateur qui synchronise.",
+    steps: ["Sur l'accueil, section <b>Dossier de travail</b>, cliquez sur <b>Choisir un dossier…</b>", "Sélectionnez votre dossier OneDrive ou Google Drive, puis autorisez l'accès."] });
+  T.push({ id: "pen", ic: IC.pen, t: "Les boutons de votre stylet", s: "Gomme, barre rapide, surligneur… à vous de choisir.",
+    why: "Le bouton du stylet peut afficher la barre rapide sous la pointe, gommer ou passer au surligneur, comme dans OneNote.",
+    steps: ["Ouvrez <b>Affichage</b> › <b>Boutons du stylet…</b>", "Appuyez sur un bouton du stylet, puis choisissez son action."] });
+  T.push({ id: "auto", ic: IC.clock, t: "Enregistrement automatique", s: "Toutes les 30 secondes, dans le fichier ouvert.",
+    why: "Activé, OP PDF enregistre seul dans le fichier d'origine pendant que vous travaillez. Les brouillons sont de toute façon gardés sur l'accueil si vous fermez sans enregistrer.",
+    steps: ["Ouvrez un PDF.", "Menu <b>Fichier</b> › <b>Enregistrement automatique (toutes les 30 s)</b>."] });
+  T.push({ id: "keys", ic: IC.key, t: "Raccourcis clavier", s: "P stylo, H surligneur, E gomme, L sélection…",
+    why: "Chaque outil a sa touche, et vous pouvez les changer.",
+    steps: ["Ouvrez <b>Affichage</b> › <b>Raccourcis clavier…</b>", "Touchez une ligne puis appuyez sur la nouvelle touche."] });
+  return T;
+}
+const hiddenTips = () => { try { return JSON.parse(localStorage.getItem("carnet-tips-hidden") || "[]"); } catch (e) { return []; } };
+function hideTip(id) { const h = hiddenTips(); if (!h.includes(id)) h.push(id); try { localStorage.setItem("carnet-tips-hidden", JSON.stringify(h)); } catch (e) {} renderTips(); }
+let tipTimer = null;
+function renderTips() {
+  const box = $("tips"), sec = $("tipSec"); if (!box) return;
+  const hid = hiddenTips(), list = tipList().filter(t => !hid.includes(t.id));
+  sec.hidden = !list.length; box.innerHTML = "";
+  for (const t of list) {
+    const b = document.createElement("div"); b.className = "tip glass" + (t.warn ? " warn" : ""); b.tabIndex = 0; b.setAttribute("role", "button");
+    b.innerHTML = `<span class="ic"><svg viewBox="0 0 24 24">${t.ic}</svg></span><div><b></b><small></small></div><i class="tx" role="button" aria-label="Masquer ce conseil" title="Masquer ce conseil"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></i>`;
+    b.querySelector("b").textContent = t.t; b.querySelector("small").textContent = t.s;
+    b.onclick = e => { if (e.target.closest(".tx")) { e.stopPropagation(); hideTip(t.id); } else openTip(t); };
+    b.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTip(t); } };
+    box.appendChild(b);
+  }
+  // slow auto-scroll, paused while the pointer is over the cards
+  clearInterval(tipTimer);
+  if (list.length > 1) tipTimer = setInterval(() => {
+    if (!document.body.classList.contains("at-home") || box.matches(":hover") || box.contains(document.activeElement) || panel) return;
+    const step = (box.firstElementChild ? box.firstElementChild.offsetWidth : 280) + 12;
+    box.scrollTo({ left: box.scrollLeft + box.clientWidth >= box.scrollWidth - 4 ? 0 : box.scrollLeft + step, behavior: "smooth" });
+  }, 6000);
+}
+$("tipPrev").onclick = () => { const box = $("tips"); box.scrollBy({ left: -((box.firstElementChild || {}).offsetWidth || 280) - 12, behavior: "smooth" }); };
+$("tipNext").onclick = () => { const box = $("tips"); box.scrollBy({ left: ((box.firstElementChild || {}).offsetWidth || 280) + 12, behavior: "smooth" }); };
+function openTip(t) {
+  closePanel(); panel = document.createElement("div"); panel.className = "panel glass"; panel.setAttribute("role", "dialog");
+  panel.innerHTML = `<h2></h2><h3>Pourquoi</h3><p class="why"></p><h3>Comment faire</h3><ol>${t.steps.map(x => `<li>${x}</li>`).join("")}</ol>
+    <div class="dlg-actions"><button type="button" class="btn" data-a="hide">Ne plus afficher</button>${t.copy ? '<button type="button" class="btn" data-a="copy">Copier l\'adresse</button>' : ""}<button type="button" class="btn primary" data-a="close">Compris</button></div>`;
+  panel.querySelector("h2").textContent = t.t; panel.querySelector(".why").textContent = t.why;
+  panel.onclick = async e => {
+    const a = e.target.closest("[data-a]"); if (!a) return;
+    if (a.dataset.a === "copy") { try { await navigator.clipboard.writeText(t.copy); toast("Adresse copiée : collez-la dans la barre d'adresse."); } catch (err) { toast("Sélectionnez l'adresse et copiez-la avec Ctrl+C."); } return; }
+    closePanel(); if (a.dataset.a === "hide") hideTip(t.id);
+  };
+  document.body.appendChild(panel); panel.querySelector('[data-a="close"]').focus();
 }
 /* drag a tab with the mouse (or pen) to reorder the tab bar */
 let tabDrag = null, tabDragDone = false;
@@ -2875,7 +3023,7 @@ document.querySelectorAll("[data-start]").forEach(b => b.onclick = async () => {
 });
 
 setTool("pen"); updateUndo(); applyDockMode(); applyDockPrefs();
-showHome(); loadWorkDir();
+showHome(); loadWorkDir(); renderTips();
 // installed app: PDFs opened with "Ouvrir avec OP PDF" arrive here
 if ("launchQueue" in window) try { window.launchQueue.setConsumer(async lp => { for (const h of lp.files || []) await loadFile(await h.getFile(), h); }); } catch (e) {}
 })();
