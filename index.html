@@ -2593,12 +2593,12 @@ function setViewBg(k) {
   prefs.bg = k; savePrefs(); syncDom(); refreshPside();
   toast("Fond de page : " + { plain: "uni", grid: "quadrillé", lines: "ligné", dots: "pointillé" }[k] + " (affichage seulement).");
 }
-async function renderPageImage(p, W) { // page + ink into one canvas (thumbnails and PNG export)
+async function renderPageImage(p, W, doc = pdfDoc) { // page + ink into one canvas (thumbnails and PNG export)
   const k = W / p.w, H = Math.max(1, Math.round((p.h + p.extra) * k));
   const c = document.createElement("canvas"); c.width = Math.round(W); c.height = H;
   const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, H);
   if (p.kind === "pdf") {
-    const page = await pdfDoc.getPage(p.pdfIndex + 1);
+    const page = await doc.getPage(p.pdfIndex + 1);
     await page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: k, rotation: (page.rotate + (p.rot || 0)) % 360 }), background: "#ffffff" }).promise;
   } else { ctx.save(); ctx.scale(k, k); drawPaper(ctx, p, p.h + p.extra, false); ctx.restore(); }
   const hl = document.createElement("canvas"); hl.width = c.width; hl.height = H;
@@ -2782,17 +2782,16 @@ const recents = (() => {
     del: async id => { await tx("docs", "readwrite", s => s.delete(id)); await tx("files", "readwrite", s => s.delete(id)); },
   };
 })();
-function makeThumb() {
-  const v = pages[0] && views.get(pages[0].id);
-  if (!v || !v.base.width) return null;
-  const W = 240, p = v.p, H = Math.round(W * Math.min(p.h + p.extra, p.w * 1.6) / p.w);
-  const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
-  const k = W / v.base.width;
-  ctx.drawImage(v.base, 0, 0, W, v.base.height * k);
-  ctx.globalCompositeOperation = "multiply"; ctx.drawImage(v.hl, 0, 0, W, v.hl.height * (W / v.hl.width));
-  ctx.globalCompositeOperation = "source-over"; ctx.drawImage(v.ink, 0, 0, W, v.ink.height * (W / v.ink.width));
-  try { return c.toDataURL("image/jpeg", .78); } catch (e) { return null; }
+const homeThumbs = new Map(); // page id -> { key, url }: render the first page only when it changed
+async function makeThumb() { // first page rendered directly by pdf.js, sharp on the home screen
+  const p = pages[0], doc = pdfDoc; if (!p || (p.kind === "pdf" && !doc)) return null;
+  const key = thumbKey(p), had = homeThumbs.get(p.id); if (had && had.key === key) return had.url;
+  try {
+    const W = 520, full = await renderPageImage(p, W, doc);
+    const H = Math.min(full.height, Math.round(W * 1.6 * (full.width / W)));
+    const c = document.createElement("canvas"); c.width = full.width; c.height = H; c.getContext("2d").drawImage(full, 0, 0);
+    const url = c.toDataURL("image/jpeg", .9); homeThumbs.set(p.id, { key, url }); return url;
+  } catch (e) { return null; }
 }
 let autoT = null;
 function autosave(now) {
@@ -2803,8 +2802,9 @@ function autosave(now) {
 function flushRecent() { if (autoT) { clearTimeout(autoT); autoT = null; writeRecent(); } else if (currentId && dirty) writeRecent(); }
 async function writeRecent() {
   const id = currentId; if (!id || !pages.length) return;
-  const snapRec = { name: docName, nPages: pages.length, thumb: makeThumb(), draft: dirty ? pagesData() : null, handle: fileHandle };
+  const snapRec = { name: docName, nPages: pages.length, draft: dirty ? pagesData() : null, handle: fileHandle }, thumbP = makeThumb();
   try {
+    snapRec.thumb = await thumbP;
     const old = await recents.get(id);
     const file = await recents.getFile(id);
     await recents.put({ id, name: snapRec.name, size: file ? file.length : 0, updated: Date.now(), handle: snapRec.handle || (old && old.handle) || null,
