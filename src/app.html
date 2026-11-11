@@ -753,7 +753,7 @@ function makeView(p) {
   if (p.kind === "pdf") buildForms(v);
   return v;
 }
-const vkey = p => [scale, p.extra, p.w, p.h, p.rot || 0, prefs.bg || ""].join(":");
+const vkey = p => [scale, p.extra, p.w, p.h, p.rot || 0, bgKey()].join(":");
 function newBlank(w = 595.28, h = 841.89, bg = "grid") { return { id: nid(), kind: "blank", w, h, extra: 0, bg, strokes: [] }; }
 
 const io = new IntersectionObserver(ents => {
@@ -801,8 +801,12 @@ function drawPaper(ctx, p, H, pattern = true) {
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, p.w, H);
   if (pattern) drawPattern(ctx, p, H);
 }
+const BG_GAP0 = { lines: 8, grid: 5, dots: 5 }; // mm
+const bgGapMm = bg => ((prefs.bgGap || {})[bg]) || BG_GAP0[bg] || 5;
+const bgKey = () => (prefs.bg || "") + (prefs.bg && prefs.bg !== "plain" ? "@" + bgGapMm(prefs.bg) : "");
 function drawPattern(ctx, p, H) { // Affichage › Fond de page: screen only, never written into the PDF
   const bg = prefs.bg; if (!bg || bg === "plain") return;
+  const GRID = bgGapMm(bg) * 72 / 25.4, RULE = GRID;
   ctx.lineWidth = .5;
   if (bg === "grid") {
     ctx.strokeStyle = "#cfdcef"; ctx.beginPath();
@@ -1819,8 +1823,7 @@ $("bView").onclick = e => openMenu(e.currentTarget, [
   "-",
   { label: (fingerDraw ? "✓ " : "") + "Dessiner au doigt (écran tactile)", run: () => { fingerDraw = !fingerDraw; prefs.finger = fingerDraw; savePrefs(); applyBodyClasses(); } },
   "-",
-  { hint: "Fond de page (non enregistré dans le PDF)" },
-  ...[["plain", "Uni"], ["grid", "Quadrillé"], ["lines", "Ligné"], ["dots", "Pointillé"]].map(([k, l]) => ({ label: ((prefs.bg || "plain") === k ? "✓ " : "") + l, run: () => setViewBg(k) })),
+  { label: "Fond de page : " + BG_NAMES[prefs.bg || "plain"] + (prefs.bg && prefs.bg !== "plain" ? ", " + bgGapMm(prefs.bg) + " mm" : "") + "…", run: openBgPanel },
   "-",
   { label: (prefs.night ? "✓ " : "") + "Lecture de nuit (pages sombres)", run: () => { prefs.night = !prefs.night; savePrefs(); applyBodyClasses(); } },
   "-",
@@ -2787,9 +2790,26 @@ function movePage(p, to) {
   const i = pages.indexOf(p); if (i < 0 || to === i || to === i + 1) return;
   pushHistory(); pages.splice(i, 1); pages.splice(to > i ? to - 1 : to, 0, p); syncDom(); refreshPside();
 }
-function setViewBg(k) {
-  prefs.bg = k; savePrefs(); syncDom(); refreshPside();
-  toast("Fond de page : " + { plain: "uni", grid: "quadrillé", lines: "ligné", dots: "pointillé" }[k] + " (affichage seulement).");
+const BG_NAMES = { plain: "uni", grid: "quadrillé", lines: "ligné", dots: "pointillé" };
+function setViewBg(k) { prefs.bg = k; savePrefs(); syncDom(); refreshPside(); }
+function setBgGap(mm) { prefs.bgGap = { ...(prefs.bgGap || {}), [prefs.bg]: mm }; savePrefs(); syncDom(); refreshPside(); }
+function openBgPanel() { // Affichage › Fond de page: pattern + spacing, applied live
+  closePanel(); panel = document.createElement("div"); panel.className = "panel glass"; panel.setAttribute("role", "dialog");
+  const draw = () => {
+    const bg = prefs.bg || "plain", gap = bgGapMm(bg);
+    panel.innerHTML = `<h2>Fond de page</h2><p>Affiché à l'écran seulement, jamais enregistré dans le PDF.</p>
+      <div class="ptabs">${[["plain", "Uni"], ["lines", "Ligné"], ["grid", "Quadrillé"], ["dots", "Pointillé"]].map(([k, l]) => `<button type="button" data-bg="${k}" aria-pressed="${bg === k}">${l}</button>`).join("")}</div>
+      ${bg === "plain" ? "" : `<h3 style="margin:14px 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Espacement</h3>
+      <div class="ptabs">${[4, 5, 6, 7, 8, 9, 10, 12].map(m => `<button type="button" data-gap="${m}" aria-pressed="${gap === m}">${m} mm</button>`).join("")}</div>`}
+      <div class="dlg-actions"><button type="button" class="btn primary" data-a="close">OK</button></div>`;
+  };
+  panel.onclick = e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.bg) { setViewBg(b.dataset.bg); draw(); }
+    else if (b.dataset.gap) { setBgGap(+b.dataset.gap); draw(); }
+    else if (b.dataset.a === "close") closePanel();
+  };
+  draw(); document.body.appendChild(panel); panel.querySelector('[data-a="close"]').focus();
 }
 async function renderPageImage(p, W, doc = pdfDoc) { // page + ink into one canvas (thumbnails and PNG export)
   const k = W / p.w, H = Math.max(1, Math.round((p.h + p.extra) * k));
@@ -2884,7 +2904,7 @@ function openPside() {
 function closePside() { if (!pside) return; pside.remove(); pside = null; $("bPages").setAttribute("aria-pressed", "false"); applyBodyClasses(); fitWidth(); }
 function refreshPside() { if (!pside) return; clearTimeout(psideT); psideT = setTimeout(renderPside, 250); }
 const arrIds = new WeakMap(); let arrN = 0;
-const thumbKey = p => [p.w, p.h, p.extra, p.rot || 0, prefs.bg || "", arrIds.get(p.strokes) || (arrIds.set(p.strokes, ++arrN), arrN)].join(",");
+const thumbKey = p => [p.w, p.h, p.extra, p.rot || 0, bgKey(), arrIds.get(p.strokes) || (arrIds.set(p.strokes, ++arrN), arrN)].join(",");
 let dragPage = null;
 function renderPside() {
   if (!pside) return;
