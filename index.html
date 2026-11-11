@@ -917,6 +917,7 @@ function imgFor(src) {
   return im.complete && im.naturalWidth ? im : null;
 }
 function paintStroke(ctx, st) {
+  if (st.tool === "table") { paintTable(ctx, st); return; }
   if (st.tool === "text") {
     ctx.fillStyle = st.color; ctx.font = fontCss(st, st.size); ctx.textBaseline = "alphabetic";
     st.text.split("\n").forEach((ln, i) => {
@@ -939,6 +940,7 @@ function paintStroke(ctx, st) {
 }
 function shifted(st, dx, dy) {
   const o = { ...st, id: st.id, pts: st.pts.map(q => [q[0] + dx, q[1] + dy, q[2]]), bb: null };
+  if (cellEdit && cellEdit.id === st.id) commitCell();
   if (st.x != null) { o.x += dx; o.y += dy; }
   if (st.rects) o.rects = st.rects.map(([x, y, w, h]) => [x + dx, y + dy, w, h]);
   return o;
@@ -978,6 +980,7 @@ function drawSelectionUI(off = [0, 0]) {
     ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(hx - w / 2, hy - h / 2, w, h, sw / 2); else ctx.rect(hx - w / 2, hy - h / 2, w, h); ctx.fill(); ctx.stroke();
   }
   ctx.restore();
+  { const ts = tableSel(); if (ts) drawTableCellUI(ctx, ts); }
   selBar = document.createElement("div"); selBar.className = "selbar glass";
   selBar.innerHTML = '<button type="button" data-a="copy">Copier</button><button type="button" data-a="dup">Dupliquer</button><button type="button" data-a="front">Couleur active</button><button type="button" class="del" data-a="del">Supprimer</button>';
   selBar.style.left = Math.max(0, b[0] * scale) + "px"; selBar.style.top = Math.max(-34, b[1] * scale - 74) + "px";
@@ -997,6 +1000,7 @@ function xform(st, fn, k, kx = k, ky = k) { // apply a point map (scale/rotate) 
   if (st.size) o.size = st.size * k;
   if (st.x != null) { const c = fn(st.x + st.w / 2, st.y + st.h / 2); o.w = st.w * kx; o.h = st.h * ky; o.x = c[0] - o.w / 2; o.y = c[1] - o.h / 2; }
   if (st.rects) o.rects = st.rects.map(([x, y, w, h]) => { const c = fn(x + w / 2, y + h / 2); return [c[0] - w * kx / 2, c[1] - h * ky / 2, w * kx, h * ky]; });
+  if (st.tool === "table") { o.cw = st.cw.map(w => w * kx); o.rh = st.rh.map(h => h * ky); o.fs = st.fs * k; o.size = (st.size || 1) * k; tableFit(o); }
   return o;
 }
 function selXform(g) {
@@ -1073,6 +1077,7 @@ function attachPointer(v) {
     e.preventDefault();
     if (t === "text") {
       const [x, y] = toPage(v, e), hit = textHit(v.p, x, y);
+      { const tb = !hit && tableAt(v.p, x, y); if (tb) { openCellEditor(v, tb, tableCellAt(tb, x, y)); return; } }
       if (hit) { // one click: select and drag; double click: edit
         if (textTap(hit)) { openTextEditor(v, x, y); return; }
         commitText(); selection = { pageId: v.p.id, ids: new Set([hit.id]) }; drawSelectionUI();
@@ -1108,6 +1113,15 @@ function attachPointer(v) {
       if (selection) { selection = null; drawSelectionUI(); }
       g = { t: "eraser", mode: t === "eraserStroke" ? "stroke" : t === "eraserArea" ? "area" : eraserCfg.mode, pushed: false }; eraseAt(v, g, x, y);
     } else if (t === "lasso") {
+      let tb = tableAt(v.p, x, y);
+      if (tb) {
+        const cell = tableCellAt(tb, x, y);
+        if (textTap(tb)) { g = null; openCellEditor(v, tb, cell); return; }
+        commitCell();
+        const was = tableSel() === tb;
+        if (was) { const ln = tableLineAt(tb, x, y, 6 / scale); if (ln) { g = { t: "tline", id: tb.id, ax: ln.ax, i: ln.i, sx: x, sy: y, orig: (ln.ax === "c" ? tb.cw : tb.rh).slice() }; return; } }
+        selection = { pageId: v.p.id, ids: new Set([tb.id]) }; tableCell = { id: tb.id, ...cell }; drawSelectionUI();
+      } else tableCell = null;
       { const ht = textHit(v.p, x, y); if (ht && textTap(ht)) { openTextEditor(v, x, y); g = null; return; } }
       { const he = [...v.p.strokes].reverse().find(s => s.eq && x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h); if (he && textTap(he)) { g = null; openEqPanel(he); return; } }
       const b = selection && selection.pageId === v.p.id ? selBox() : null;
@@ -1156,11 +1170,12 @@ function attachPointer(v) {
       } else if (g.t === "eraser") eraseAt(v, g, x, y);
       else if (g.t === "lasso") { if (g.rect) { const [ax, ay] = g.rect; g.poly = [[ax, ay], [x, ay], [x, y], [ax, y]]; } else g.poly.push([x, y]); }
       else if (g.t === "move") { g.dx = x - g.sx; g.dy = y - g.sy; }
+      else if (g.t === "tline") tableDrag(v, g, x, y);
       else if (g.t === "thl" && g.items) { const h = hitText(g.items, x, y); if (h) { if (!g.a) g.a = h; g.b = h; } }
     }
     if (g.t === "thl") { drawThl(v, g); return; }
     if (g.t === "scale" || g.t === "rot") { const fn = selXform(g); drawInk(v, fn); drawSelPreview(v, fn); return; }
-    if (g.t === "laser") return;
+    if (g.t === "laser" || g.t === "tline") return;
     if (g.st) drawLive(v, g.st);
     else if (g.t === "lasso") drawLasso(v, g.poly);
     else if (g.t === "move") { drawInk(v, [g.dx, g.dy]); drawSelectionUI([g.dx, g.dy]); }
@@ -1170,6 +1185,7 @@ function attachPointer(v) {
     if (!g) return; const G = g; g = null;
     clearTimeout(G.holdT);
     if (G.t === "laser") return;
+    if (G.t === "tline") { const sb = selBox(); if (sb) autoGrow(v.p, sb[3]); drawInk(v); drawSelectionUI(); return; }
     if (G.t === "scale" || G.t === "rot") {
       const fn = selXform(G);
       if (G.t === "rot" ? Math.abs(G.ang) > .005 : (Math.abs(G.kx - 1) > .005 || Math.abs(G.ky - 1) > .005)) { pushHistory(); v.p.strokes = v.p.strokes.map(s => selection && selection.ids.has(s.id) ? fn(s) : s); const sb = selBox(); if (sb) autoGrow(v.p, sb[3]); }
@@ -1250,6 +1266,7 @@ function openTextEditor(v, x, y) {
   setTimeout(() => { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
 }
 function commitText() {
+  commitCell();
   if (!editing) return;
   const { v, st, ta, x, y, size, color, font, b, i } = editing; editing = null;
   const text = ta.value.replace(/\s+$/, ""); ta.remove();
@@ -1731,6 +1748,23 @@ async function buildPdf() {
     const o0 = map(0, 0), ux = map(1, 0), ang = Math.atan2(ux[1] - o0[1], ux[0] - o0[0]) * 180 / Math.PI;
     for (const st of p.strokes) {
       if (st.tool === "hl" || st.tool === "thl" || st.tool === "text" || st.tool === "note") continue;
+      if (st.tool === "table") {
+        const X = tCols(st), Y = tRows(st), R = st.rh.length, C = st.cw.length, sz = st.size || 1, col = hex(st.color);
+        const L = (x1, y1, x2, y2, t) => { const a = map(x1, y1), b = map(x2, y2); pg.drawLine({ start: { x: a[0], y: a[1] }, end: { x: b[0], y: b[1] }, thickness: t, color: col, lineCap: LineCapStyle.Projecting }); };
+        if (st.header && R > 1) pg.drawSvgPath(poly2d([[X[0], Y[0]], [X[C], Y[0]], [X[C], Y[1]], [X[0], Y[1]]], flip), { x: 0, y: 0, color: col, opacity: .08 });
+        for (let r = 0; r <= R; r++) L(X[0], Y[r], X[C], Y[r], st.header && r === 1 && R > 1 ? sz * 2 : sz);
+        for (let c = 0; c <= C; c++) L(X[c], Y[0], X[c], Y[R], sz);
+        for (let r = 0; r < R; r++) {
+          const fo = cellFont(st, r), nm = STD_FONTS.helv[fo.b ? 1 : 0];
+          let font = embedded.get(nm); if (!font) { font = await out.embedFont(StandardFonts[nm]); embedded.set(nm, font); }
+          for (let c = 0; c < C; c++) if (st.cells[r][c]) wrapLines(st.cells[r][c], Math.max(4, st.cw[c] - 2 * T_PAD), st.fs, fo).forEach((ln, i) => {
+            const safe = [...ln].map(ch => { try { font.encodeText(ch); return ch; } catch (e) { return "?"; } }).join(""); if (!safe) return;
+            const [bx, by] = map(X[c] + T_PAD, Y[r] + T_PAD + st.fs * (.82 + i * TEXT_LH));
+            pg.drawText(safe, { x: bx, y: by, size: st.fs, font, color: col, rotate: degrees(ang) });
+          });
+        }
+        continue;
+      }
       if (st.tool === "img") {
         try {
           let im = embedded.get(st.src);
@@ -2883,7 +2917,7 @@ function openTablePanel() {
   const draw = () => {
     const prev = [];
     for (let r = 0; r < Math.min(tableCfg.rows, 12); r++) prev.push(`<tr>${Array.from({ length: Math.min(tableCfg.cols, 8) }, () => `<td style="border:1px solid ${tableCfg.color};height:14px;${tableCfg.header && r === 0 ? "background:rgba(47,98,224,.12)" : ""}"></td>`).join("")}</tr>`);
-    panel.innerHTML = `<h2>Insérer un tableau</h2><p>Le tableau est posé sur la page affichée, déjà sélectionné : déplacez-le, étirez-le avec les poignées, puis écrivez dans les cases avec l'outil Texte.</p>
+    panel.innerHTML = `<h2>Insérer un tableau</h2><p>Le tableau est posé sur la page affichée, déjà sélectionné. Double-cliquez dans une case pour écrire (Tab passe à la case suivante), et tirez une ligne de la grille pour changer la largeur d'une colonne ou la hauteur d'une ligne.</p>
       <div class="prow"><b>Lignes</b><div class="ctl"><button type="button" class="btn" data-d="rows:-1" aria-label="Moins de lignes">−</button><b style="min-width:2ch;text-align:center">${tableCfg.rows}</b><button type="button" class="btn" data-d="rows:1" aria-label="Plus de lignes">+</button></div></div>
       <div class="prow"><b>Colonnes</b><div class="ctl"><button type="button" class="btn" data-d="cols:-1" aria-label="Moins de colonnes">−</button><b style="min-width:2ch;text-align:center">${tableCfg.cols}</b><button type="button" class="btn" data-d="cols:1" aria-label="Plus de colonnes">+</button></div></div>
       <label class="ptog"><input type="checkbox" id="tHead"${tableCfg.header ? " checked" : ""}><span>Première ligne d'en-tête (trait plus épais en dessous)</span></label>
@@ -2902,17 +2936,132 @@ function openTablePanel() {
 function insertTable() {
   const p = pages[currentPageIndex()]; if (!p) return;
   const { rows, cols, header, color } = tableCfg, size = tableCfg.size || 1;
-  const W = Math.min(p.w - 80, cols * 110), rh = 24, H = rows * rh;
-  const v = views.get(p.id), vis = v ? Math.max(0, (desk.scrollTop - v.el.offsetTop) / scale) : 0;
-  const x0 = (p.w - W) / 2, y0 = Math.max(30, Math.min(p.h + p.extra - H - 30, vis + 120));
-  const line = (ax, ay, bx, by, sz = size) => ({ id: nid(), tool: "pen", shape: "line", color, size: sz, pr: false, pts: [[ax, ay, .5], [bx, by, .5]] });
-  const add = [];
-  for (let r = 0; r <= rows; r++) add.push(line(x0, y0 + r * rh, x0 + W, y0 + r * rh, header && r === 1 && rows > 1 ? size * 2 : size));
-  for (let c = 0; c <= cols; c++) add.push(line(x0 + c * W / cols, y0, x0 + c * W / cols, y0 + H));
+  const W = Math.min(p.w - 80, cols * 110), H = rows * 24;
+  const x = (p.w - W) / 2, y = visibleY(p, H);
+  const st = tableNorm({ id: nid(), tool: "table", x, y, cw: Array(cols).fill(W / cols), rh: Array(rows).fill(24), cells: Array.from({ length: rows }, () => Array(cols).fill("")), header, color, size, fs: 11 });
   pushHistory();
-  p.strokes = p.strokes.concat(add); setTool("lasso"); selection = { pageId: p.id, ids: new Set(add.map(s => s.id)) }; refresh(p);
-  autoGrow(p, y0 + H);
-  toast("Tableau inséré : déplacez-le ou étirez-le, puis écrivez dedans avec l'outil Texte (T).");
+  p.strokes = p.strokes.concat([st]); setTool("lasso"); selection = { pageId: p.id, ids: new Set([st.id]) }; tableCell = { id: st.id, r: 0, c: 0 }; refresh(p);
+  autoGrow(p, y + H);
+  toast("Tableau inséré : double-cliquez dans une case pour écrire, tirez une ligne de la grille pour changer une largeur ou une hauteur.");
+}
+/* ---------- table object: column widths, row heights, cell texts ---------- */
+const T_PAD = 4;
+let tableCell = null, cellEdit = null;
+const tCols = st => st.cw.reduce((a, w) => (a.push(a[a.length - 1] + w), a), [st.x]);
+const tRows = st => st.rh.reduce((a, h) => (a.push(a[a.length - 1] + h), a), [st.y]);
+function tableNorm(st) {
+  st.w = st.cw.reduce((a, b) => a + b, 0); st.h = st.rh.reduce((a, b) => a + b, 0); delete st.bb;
+  const { x, y, w, h } = st; st.pts = [[x, y, .5], [x + w, y, .5], [x, y + h, .5], [x + w, y + h, .5], [x + w / 2, y + h / 2, .5]];
+  return st;
+}
+function wrapLines(text, width, fs, fo) {
+  measureCtx.font = fontCss(fo, fs); const out = [];
+  for (const para of String(text || "").split("\n")) {
+    let line = "";
+    for (const word of para.split(/(\s+)/)) {
+      if (!word) continue;
+      const t = line + word;
+      if (measureCtx.measureText(t).width <= width || !line.trim()) {
+        if (measureCtx.measureText(t).width > width && !line.trim()) { // a word longer than the cell: cut it
+          let chunk = line; for (const ch of word) { if (measureCtx.measureText(chunk + ch).width > width && chunk) { out.push(chunk); chunk = ""; } chunk += ch; } line = chunk;
+        } else line = t;
+      } else { out.push(line.replace(/\s+$/, "")); line = word.trim() ? word : ""; }
+    }
+    out.push(line.replace(/\s+$/, ""));
+  }
+  return out;
+}
+const cellFont = (st, r) => ({ font: "helv", b: !!(st.header && r === 0 && st.rh.length > 1), i: false });
+function cellNeed(st, r) { // height a row needs for its texts
+  let n = 1; st.cw.forEach((w, c) => { if (st.cells[r][c]) n = Math.max(n, wrapLines(st.cells[r][c], Math.max(4, w - 2 * T_PAD), st.fs, cellFont(st, r)).length); });
+  return n * st.fs * TEXT_LH + 2 * T_PAD;
+}
+function tableFit(st) { st.rh = st.rh.map((h, r) => Math.max(h, cellNeed(st, r))); return tableNorm(st); }
+function paintTable(ctx, st) {
+  const X = tCols(st), Y = tRows(st), R = st.rh.length, C = st.cw.length, sz = st.size || 1;
+  ctx.save();
+  if (st.header && R > 1) { ctx.globalAlpha = .08; ctx.fillStyle = st.color; ctx.fillRect(X[0], Y[0], st.w, st.rh[0]); ctx.globalAlpha = 1; }
+  ctx.strokeStyle = st.color; ctx.lineCap = "square";
+  for (let r = 0; r <= R; r++) { ctx.lineWidth = st.header && r === 1 && R > 1 ? sz * 2 : sz; ctx.beginPath(); ctx.moveTo(X[0], Y[r]); ctx.lineTo(X[C], Y[r]); ctx.stroke(); }
+  ctx.lineWidth = sz; for (let c = 0; c <= C; c++) { ctx.beginPath(); ctx.moveTo(X[c], Y[0]); ctx.lineTo(X[c], Y[R]); ctx.stroke(); }
+  ctx.fillStyle = st.color; ctx.textBaseline = "alphabetic";
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const t = st.cells[r][c]; if (!t || (cellEdit && cellEdit.id === st.id && cellEdit.r === r && cellEdit.c === c)) continue;
+    const fo = cellFont(st, r); ctx.font = fontCss(fo, st.fs);
+    wrapLines(t, Math.max(4, st.cw[c] - 2 * T_PAD), st.fs, fo).forEach((ln, i) => ctx.fillText(ln, X[c] + T_PAD, Y[r] + T_PAD + st.fs * (.82 + i * TEXT_LH)));
+  }
+  ctx.restore();
+}
+function tableAt(p, x, y) { return [...p.strokes].reverse().find(s => s.tool === "table" && x >= s.x - 3 && x <= s.x + s.w + 3 && y >= s.y - 3 && y <= s.y + s.h + 3); }
+function tableCellAt(st, x, y) {
+  const X = tCols(st), Y = tRows(st); let c = 0, r = 0;
+  while (c < st.cw.length - 1 && x > X[c + 1]) c++; while (r < st.rh.length - 1 && y > Y[r + 1]) r++;
+  return { r, c };
+}
+function tableLineAt(st, x, y, tol) {
+  const X = tCols(st), Y = tRows(st); let best = null;
+  if (y >= Y[0] - tol && y <= Y[Y.length - 1] + tol) for (let i = 1; i < X.length; i++) { const d = Math.abs(x - X[i]); if (d < tol && (!best || d < best.d)) best = { ax: "c", i, d }; }
+  if (x >= X[0] - tol && x <= X[X.length - 1] + tol) for (let i = 1; i < Y.length; i++) { const d = Math.abs(y - Y[i]); if (d < tol && (!best || d < best.d)) best = { ax: "r", i, d }; }
+  return best;
+}
+function tableSel() { // the table when it alone is selected
+  if (!selection || selection.ids.size !== 1) return null;
+  const p = pages.find(q => q.id === selection.pageId); const st = p && p.strokes.find(s => selection.ids.has(s.id));
+  return st && st.tool === "table" ? st : null;
+}
+function drawTableCellUI(ctx, st) {
+  if (!tableCell || tableCell.id !== st.id) return;
+  const X = tCols(st), Y = tRows(st), { r, c } = tableCell; if (r >= st.rh.length || c >= st.cw.length) return;
+  ctx.save(); ctx.setLineDash([]); ctx.strokeStyle = accentC(); ctx.lineWidth = 2 / scale; ctx.fillStyle = accentC(.08);
+  ctx.fillRect(X[c], Y[r], st.cw[c], st.rh[r]); ctx.strokeRect(X[c], Y[r], st.cw[c], st.rh[r]);
+  ctx.fillStyle = "#fff"; ctx.lineWidth = 1.4 / scale; const a = 4 / scale, l = 11 / scale;
+  for (const [hx, hy, w, h] of [[X[c + 1], (Y[r] + Y[r + 1]) / 2, a, l], [(X[c] + X[c + 1]) / 2, Y[r + 1], l, a]]) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(hx - w / 2, hy - h / 2, w, h, a / 2); else ctx.rect(hx - w / 2, hy - h / 2, w, h); ctx.fill(); ctx.stroke(); }
+  ctx.restore();
+}
+function tableDrag(v, g, x, y) { // dragging a grid line: one column wider/narrower or one row taller/shorter
+  const st = v.p.strokes.find(s => s.id === g.id); if (!st) return;
+  if (!g.pushed) { if (Math.abs(x - g.sx) + Math.abs(y - g.sy) < .5) return; pushHistory(); g.pushed = true; }
+  const o = { ...st, cw: st.cw.slice(), rh: st.rh.slice() };
+  if (g.ax === "c") { o.cw[g.i - 1] = Math.max(12, g.orig[g.i - 1] + x - g.sx); tableFit(o); }
+  else { o.rh[g.i - 1] = Math.max(cellNeed(o, g.i - 1), 10, g.orig[g.i - 1] + y - g.sy); tableNorm(o); }
+  v.p.strokes = v.p.strokes.map(s => s === st ? o : s); drawInk(v); drawSelectionUI();
+}
+function openCellEditor(v, st, cell) {
+  commitText();
+  const X = tCols(st), Y = tRows(st), { r, c } = cell, fo = cellFont(st, r);
+  selection = { pageId: v.p.id, ids: new Set([st.id]) }; tableCell = { id: st.id, r, c };
+  const ta = document.createElement("textarea"); ta.className = "tedit tcell"; ta.spellcheck = true; ta.setAttribute("aria-label", "Texte de la case");
+  ta.value = st.cells[r][c] || "";
+  Object.assign(ta.style, { left: (X[c] + T_PAD) * scale + "px", top: (Y[r] + T_PAD) * scale + "px", width: (st.cw[c] - 2 * T_PAD) * scale + "px", font: fontCss(fo, st.fs * scale), lineHeight: TEXT_LH, color: st.color, whiteSpace: "pre-wrap", overflow: "hidden" });
+  cellEdit = { v, id: st.id, r, c, ta };
+  const fit = () => { const cur = v.p.strokes.find(s => s.id === st.id) || st; ta.style.height = Math.max(cur.rh[r] - 2 * T_PAD, wrapLines(ta.value || " ", Math.max(4, cur.cw[c] - 2 * T_PAD), cur.fs, fo).length * cur.fs * TEXT_LH) * scale + "px"; };
+  ta.addEventListener("input", fit);
+  ta.addEventListener("keydown", e => {
+    e.stopPropagation();
+    if (e.key === "Escape") { e.preventDefault(); commitCell(); drawSelectionUI(); }
+    else if (e.key === "Tab") { // next / previous cell
+      e.preventDefault(); const cur = v.p.strokes.find(s => s.id === st.id) || st, C = cur.cw.length, R = cur.rh.length;
+      let k = r * C + c + (e.shiftKey ? -1 : 1); k = (k + R * C) % (R * C);
+      commitCell(); const nst = v.p.strokes.find(s => s.id === st.id); if (nst) openCellEditor(v, nst, { r: Math.floor(k / C), c: k % C });
+    }
+  });
+  ta.addEventListener("blur", () => setTimeout(() => { if (cellEdit && cellEdit.ta === ta) { commitCell(); drawSelectionUI(); } }, 0));
+  ta.addEventListener("pointerdown", e => e.stopPropagation());
+  v.el.appendChild(ta); fit(); drawInk(v); drawSelectionUI();
+  ta.focus({ preventScroll: true });
+  setTimeout(() => { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
+}
+function commitCell() {
+  if (!cellEdit) return;
+  const { v, id, r, c, ta } = cellEdit; cellEdit = null; ta.remove();
+  const st = v.p.strokes.find(s => s.id === id); if (!st) return;
+  const text = ta.value.replace(/\s+$/, "");
+  if (text !== (st.cells[r][c] || "")) {
+    pushHistory();
+    const o = { ...st, cells: st.cells.map(row => row.slice()), rh: st.rh.slice() }; o.cells[r][c] = text; tableFit(o);
+    v.p.strokes = v.p.strokes.map(s => s === st ? o : s); autoGrow(v.p, o.y + o.h);
+  }
+  drawInk(v);
 }
 /* ---------- links: blue underlined text, a real link annotation in the saved PDF ---------- */
 function visibleY(p, h) { // top of the visible part of the page, below anything inserted there just before
@@ -3144,7 +3293,7 @@ async function rotatePage(p) { // quarter turn clockwise, the ink turns with the
   p.strokes = p.strokes.map(st => {
     const o = { ...st, pts: st.pts.map(turn) }; delete o.bb;
     if (st.rects) o.rects = st.rects.map(([x, y, w, h]) => [H - y - h, x, h, w]);
-    if (st.tool === "text") { o.x = H - st.y - st.h; o.y = st.x; }
+    if (st.tool === "text" || st.tool === "table") { o.x = H - st.y - st.h; o.y = st.x; }
     return o;
   });
   textCache.delete(p.id);
