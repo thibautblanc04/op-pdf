@@ -53,6 +53,7 @@ button,input,select{font:inherit;color:inherit}
 .top{position:fixed;z-index:6;top:calc(10px + env(safe-area-inset-top,0px));left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
   border-radius:26px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:6px 8px}
 .brand{font-weight:700;font-size:15px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;padding:0 6px 0 4px;min-width:0}
+html{--accent-c:#2f62e0}
 .logo{width:30px;height:30px;display:grid;place-items:center;flex:none}
 .logo svg{width:30px;height:30px}
 .brand small{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:11.5px;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -189,7 +190,8 @@ body.tool-pointer .c-ui{cursor:default}
 body.tool-pointer .page .textLayer{display:block}
 .page .textLayer :is(span,br){color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0% 0%}
 .page .textLayer span.markedContent{top:0;height:0}
-.page .textLayer ::selection{background:rgba(47,98,224,.32)}
+.page .textLayer ::selection{background:color-mix(in srgb,var(--accent) 32%,transparent)}
+::selection{background:color-mix(in srgb,var(--accent) 28%,transparent)}
 .page .textLayer br::selection{background:transparent}
 .page .textLayer .endOfContent{display:block;position:absolute;inset:100% 0 0;z-index:-1;cursor:default;user-select:none}
 .page .textLayer .endOfContent.active{top:0}
@@ -269,10 +271,10 @@ body.pside-open .desk{padding-left:240px}
 .sbar input:focus-visible{outline:none}
 .sbar .cnt{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);padding:0 6px;white-space:nowrap}
 @media (max-width:720px){body.pside-open .desk{padding-left:16px}.pside{width:170px}}
-.ruler{position:fixed;left:0;top:0;width:640px;height:76px;z-index:5;border-radius:14px;background:rgba(235,242,255,.55);backdrop-filter:blur(6px) saturate(1.3);-webkit-backdrop-filter:blur(6px) saturate(1.3);
-  border:1px solid rgba(47,98,224,.35);box-shadow:0 6px 22px rgba(30,40,80,.18);touch-action:none;cursor:grab;transform-origin:50% 50%}
+.ruler{position:fixed;left:0;top:0;width:640px;height:76px;z-index:5;border-radius:14px;background:color-mix(in srgb,var(--accent) 9%,rgba(255,255,255,.55));backdrop-filter:blur(6px) saturate(1.3);-webkit-backdrop-filter:blur(6px) saturate(1.3);
+  border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);box-shadow:0 6px 22px rgba(30,40,80,.18);touch-action:none;cursor:grab;transform-origin:50% 50%}
 .ruler canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.ruler .rang{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:600 12px var(--f-mono);color:#2f62e0;pointer-events:none}
+.ruler .rang{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:600 12px var(--f-mono);color:var(--accent-c);pointer-events:none}
 .ruler .rknob{position:absolute;right:-18px;top:50%;margin-top:-17px;width:34px;height:34px;border-radius:50%;border:0;display:grid;place-items:center;cursor:alias;color:var(--ink);touch-action:none}
 .ruler .rknob svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .shapes{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
@@ -308,9 +310,9 @@ body.has-tabs .sbar{top:calc(122px + env(safe-area-inset-top,0px))}
 body.has-tabs .toast{top:calc(118px + env(safe-area-inset-top,0px))}
 body.pen-near .desk,body.pen-near .page .c-ui{touch-action:none}
 .forms{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;z-index:2}
-.forms .ff{position:absolute;box-sizing:border-box;margin:0;border:1px solid rgba(47,98,224,.4);background:rgba(214,226,255,.42);border-radius:2px;font:10px Helvetica,Arial,sans-serif;padding:0 2px;color:#111;pointer-events:none;resize:none;outline:none}
-.forms .ff:focus{background:rgba(255,255,255,.9);border-color:#2f62e0;box-shadow:0 0 0 1.5px rgba(47,98,224,.35)}
-.forms input[type=checkbox].ff,.forms input[type=radio].ff{accent-color:#2f62e0;background:transparent;border:0;padding:0}
+.forms .ff{position:absolute;box-sizing:border-box;margin:0;border:1px solid color-mix(in srgb,var(--accent-c) 40%,transparent);background:color-mix(in srgb,var(--accent-c) 14%,rgba(255,255,255,.4));border-radius:2px;font:10px Helvetica,Arial,sans-serif;padding:0 2px;color:#111;pointer-events:none;resize:none;outline:none}
+.forms .ff:focus{background:rgba(255,255,255,.9);border-color:var(--accent-c);box-shadow:0 0 0 1.5px color-mix(in srgb,var(--accent-c) 35%,transparent)}
+.forms input[type=checkbox].ff,.forms input[type=radio].ff{accent-color:var(--accent-c);background:transparent;border:0;padding:0}
 body.tool-text .forms .ff,body.tool-hand .forms .ff{pointer-events:auto}
 .wtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
 .wtools .wname{font-size:13px;color:var(--muted);flex:1;min-width:160px}
@@ -371,7 +373,7 @@ body.tool-text .forms .ff,body.tool-hand .forms .ff{pointer-events:auto}
 /* trust screen shown just before the browser's file permission prompt */
 .trust{position:fixed;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:rgba(20,28,48,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .trust .card{width:min(560px,100%);border-radius:32px;padding:30px 28px 22px;text-align:center;background:var(--glass-strong)}
-.trust .shield{width:84px;height:84px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);box-shadow:0 10px 30px rgba(47,98,224,.35)}
+.trust .shield{width:84px;height:84px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);box-shadow:0 10px 30px color-mix(in srgb,var(--accent) 35%,transparent)}
 .trust .shield svg{width:44px;height:44px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .trust h2{margin:0 0 8px;font-size:clamp(20px,3.2vw,26px);letter-spacing:-.02em;text-wrap:balance}
 .trust .fname{font-weight:700;color:var(--accent);word-break:break-word}
@@ -959,14 +961,14 @@ function drawSelectionUI(off = [0, 0]) {
   const v = views.get(selection.pageId), b = selBox();
   if (!v || !b) { selection = null; return; }
   const ctx = clearUI(v); v.uiDirty = true;
-  ctx.save(); ctx.setLineDash([4 / scale, 3 / scale]); ctx.strokeStyle = "#2b59c3"; ctx.lineWidth = 1 / scale;
-  ctx.fillStyle = "rgba(43,89,195,.06)";
+  ctx.save(); ctx.setLineDash([4 / scale, 3 / scale]); ctx.strokeStyle = accentC(); ctx.lineWidth = 1 / scale;
+  ctx.fillStyle = accentC(.06);
   ctx.fillRect(b[0] + off[0], b[1] + off[1], b[2] - b[0], b[3] - b[1]);
   ctx.strokeRect(b[0] + off[0], b[1] + off[1], b[2] - b[0], b[3] - b[1]); ctx.restore();
   if (off[0] || off[1]) return;
   // handles: resize (bottom right) and rotate (above)
   const hr = 6 / scale, cx = (b[0] + b[2]) / 2, ty = b[1] - 26 / scale;
-  ctx.save(); ctx.setLineDash([]); ctx.lineWidth = 1.4 / scale; ctx.strokeStyle = "#2b59c3"; ctx.fillStyle = "#fff";
+  ctx.save(); ctx.setLineDash([]); ctx.lineWidth = 1.4 / scale; ctx.strokeStyle = accentC(); ctx.fillStyle = "#fff";
   ctx.beginPath(); ctx.moveTo(cx, b[1]); ctx.lineTo(cx, ty + hr); ctx.stroke();
   for (const [hx, hy] of [[b[2], b[3]], [cx, ty]]) { ctx.beginPath(); ctx.arc(hx, hy, hr, 0, 7); ctx.fill(); ctx.stroke(); }
   ctx.beginPath(); ctx.arc(cx, ty, hr * .45, -2.4, 1.6); ctx.stroke();
@@ -1007,7 +1009,7 @@ function drawSelPreview(v, fn) {
   for (const st of v.p.strokes) if (selection && selection.ids.has(st.id)) { const k = bbox(fn(st)); b = [Math.min(b[0], k[0]), Math.min(b[1], k[1]), Math.max(b[2], k[2]), Math.max(b[3], k[3])]; }
   if (selBar) { selBar.remove(); selBar = null; }
   const ctx = clearUI(v); v.uiDirty = true; if (b[0] > b[2]) return;
-  ctx.setLineDash([4 / scale, 3 / scale]); ctx.strokeStyle = "#2b59c3"; ctx.lineWidth = 1 / scale; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+  ctx.setLineDash([4 / scale, 3 / scale]); ctx.strokeStyle = accentC(); ctx.lineWidth = 1 / scale; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
 }
 /* copy / cut / paste of selected ink, also across pages */
 let clip = null;
@@ -1437,8 +1439,8 @@ function cutStroke(st, x, y, r) { // remove the part of a stroke under the erase
 }
 function drawLive(v, st) { const ctx = clearUI(v); v.uiDirty = true; paintStroke(ctx, st); }
 function drawLasso(v, poly) {
-  const ctx = clearUI(v); v.uiDirty = true; ctx.setLineDash([5 / scale, 4 / scale]); ctx.lineWidth = 1.2 / scale; ctx.strokeStyle = "#2b59c3";
-  ctx.fillStyle = "rgba(43,89,195,.07)"; ctx.beginPath(); poly.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill(); ctx.stroke();
+  const ctx = clearUI(v); v.uiDirty = true; ctx.setLineDash([5 / scale, 4 / scale]); ctx.lineWidth = 1.2 / scale; ctx.strokeStyle = accentC();
+  ctx.fillStyle = accentC(.07); ctx.beginPath(); poly.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill(); ctx.stroke();
 }
 function autoGrow(p, bottom) { // page grows as you write near its bottom edge
   if (bottom > p.h + p.extra - 70) { p.extra = Math.ceil((bottom + 260 - p.h) / 50) * 50; syncDom(); }
@@ -2301,8 +2303,19 @@ function applyAccent() {
   const a = ACCENTS[prefs.accent] || ACCENTS.blue, hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(",");
   const L = `--accent:${a[1]};--accent-soft:rgba(${hex(a[1])},.13);--on-accent:#fff`, D = `--accent:${a[2]};--accent-soft:rgba(${hex(a[2])},.18);--on-accent:#10131b`;
   let el = document.getElementById("accentCss"); if (!el) { el = document.createElement("style"); el.id = "accentCss"; document.head.appendChild(el); }
-  el.textContent = `html:root{${L}} @media (prefers-color-scheme: dark){html:root:not([data-theme="light"]){${D}}} html:root[data-theme="dark"]{${D}}`;
+  const mix = (h, k, base) => "#" + [1, 3, 5].map(i => Math.round(parseInt(h.slice(i, i + 2), 16) * k + parseInt(base.slice(i, i + 2), 16) * (1 - k)).toString(16).padStart(2, "0")).join("");
+  const blobL = prefs.accent && prefs.accent !== "blue" ? `;--blob-1:${mix(a[1], .3, "#ffffff")}` : "", blobD = prefs.accent && prefs.accent !== "blue" ? `;--blob-1:${mix(a[1], .45, "#10131b")}` : "";
+  el.textContent = `html:root{${L}${blobL};--accent-c:${a[1]}} @media (prefers-color-scheme: dark){html:root:not([data-theme="light"]){${D}${blobD}}} html:root[data-theme="dark"]{${D}${blobD}}`;
+  ACC_C = a[1];
+  const stops = [a[2], a[1], mix(a[1], .62, "#000000")];
+  document.querySelectorAll(".logo stop").forEach((st, i) => st.setAttribute("stop-color", stops[i] || stops[2]));
+  const ic = document.querySelector('link[rel="icon"]');
+  if (ic) { if (!ic.dataset.orig) ic.dataset.orig = ic.href; ic.href = ic.dataset.orig.replace(/%238db0ff/gi, encodeURIComponent(stops[0])).replace(/%232f62e0/gi, encodeURIComponent(stops[1])).replace(/%231d3fa6/gi, encodeURIComponent(stops[2])); }
+  const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = a[1];
+  if (typeof drawSelectionUI === "function" && typeof selection !== "undefined" && selection) drawSelectionUI();
 }
+let ACC_C = "#2f62e0";
+function accentC(alpha) { if (alpha == null) return ACC_C; return "rgba(" + [1, 3, 5].map(i => parseInt(ACC_C.slice(i, i + 2), 16)).join(",") + "," + alpha + ")"; }
 applyAccent(); applyBodyClasses();
 if (window.matchMedia) try { matchMedia("(pointer: coarse)").addEventListener("change", applyBodyClasses); } catch (e) {}
 function openSettings() {
