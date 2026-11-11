@@ -213,11 +213,6 @@ body.tool-pointer .page .textLayer{display:block}
 .eqkeys{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 6px}
 .eqkeys button{min-width:34px;height:30px;padding:0 8px;border:0;border-radius:9px;background:var(--accent-soft);color:var(--ink);font:600 13px var(--f-ui,system-ui);cursor:pointer}
 .eqkeys button:hover{filter:brightness(.95)}
-.eqpad{position:relative;margin:2px 0 8px}
-.eqpad canvas{display:block;width:100%;height:190px;border-radius:14px;background:#fff;border:1px solid rgba(0,0,0,.1);touch-action:none;cursor:crosshair}
-.eqpad .eqpadbar{position:absolute;right:8px;top:8px;display:flex;gap:4px}
-.eqpad .eqpadbar button{height:28px;padding:0 10px;border:0;border-radius:999px;background:rgba(47,98,224,.12);color:#1d1d1f;font:600 12px var(--f-ui,system-ui);cursor:pointer}
-.eqstat{font-size:12px;color:var(--muted);min-height:16px;margin:-2px 0 6px}
 .eqprev{min-height:70px;display:flex;align-items:center;justify-content:center;padding:10px;border-radius:14px;background:#fff;border:1px solid rgba(0,0,0,.08);overflow:auto;margin-bottom:10px}
 .eqprev svg{max-width:100%;height:auto}
 .eqprev .eqerr{color:#c62828;font-size:12.5px}
@@ -3015,16 +3010,8 @@ function openEqPanel(edSt) {
   const ed = edSt ? { p: pages.find(q => q.strokes.includes(edSt)), st: edSt } : selectedOne(s => !!s.eq);
   const cfg = ed ? { size: ed.st.eq.size, color: ed.st.eq.color } : { ...eqCfg };
   closePanel(); panel = document.createElement("div"); panel.className = "panel glass"; panel.setAttribute("role", "dialog");
-  let mode = ed ? "kb" : (eqCfg.mode || "kb");
-  panel.innerHTML = `<h2>${ed ? "Modifier l'équation" : "Insérer une équation"}</h2>
-    <div class="ptabs" id="eqMode" style="margin:6px 0 10px"><button type="button" data-mode="kb">⌨ Clavier</button><button type="button" data-mode="pen">✎ Stylet</button></div>
-    <div id="eqPen" hidden><p>Écrivez l'équation à la main : elle est reconnue pendant que vous écrivez, et le LaTeX ci-dessous reste modifiable au clavier.</p>
-      <div class="eqpad"><canvas id="eqCv" aria-label="Zone d'écriture de l'équation"></canvas><div class="eqpadbar"><button type="button" data-p="undo">↶ Annuler</button><button type="button" data-p="clear">Effacer</button></div></div>
-      <div class="eqstat" id="eqStat"></div>
-      <div id="eqKeysBox"></div></div>
-    <div id="eqKb"><p>Écrivez en LaTeX, ou utilisez les boutons. L'aperçu se met à jour pendant la frappe.</p>
+  panel.innerHTML = `<h2>${ed ? "Modifier l'équation" : "Insérer une équation"}</h2><p>Écrivez en LaTeX, ou utilisez les boutons. L'aperçu se met à jour pendant la frappe.</p>
     <div class="eqkeys">${EQ_KEYS.map(([l, t], i) => `<button type="button" data-k="${i}" title="${t.replace(/"/g, "&quot;")}">${l}</button>`).join("")}</div>
-    </div>
     <textarea class="fin" id="eqTex" rows="3" spellcheck="false" aria-label="Équation en LaTeX"></textarea>
     <div class="eqprev" id="eqPrev"><span class="eqerr" style="color:var(--muted)">Chargement de l'éditeur d'équations…</span></div>
     <h3>Taille</h3><div class="ptabs" id="eqSz">${[12, 14, 18, 24, 32].map(z => `<button type="button" data-z="${z}" aria-pressed="${z === cfg.size}">${z} pt</button>`).join("")}</div>
@@ -3032,13 +3019,6 @@ function openEqPanel(edSt) {
     <div class="dlg-actions"><button type="button" class="btn" data-a="cancel">Annuler</button><button type="button" class="btn primary" data-a="ok">${ed ? "Modifier" : "Insérer"}</button></div>`;
   const ta = panel.querySelector("#eqTex"), prev = panel.querySelector("#eqPrev");
   ta.value = ed ? ed.st.eq.tex : "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}";
-  const pad = eqPad(panel, tex => { ta.value = tex; show(); });
-  const setMode = m => {
-    mode = m; panel.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
-    panel.querySelector("#eqPen").hidden = m !== "pen"; panel.querySelector("#eqKb").hidden = m !== "kb";
-    if (!ed) { eqCfg.mode = m; try { localStorage.setItem("carnet-eq", JSON.stringify(eqCfg)); } catch (e) {} }
-    if (m === "pen") { if (!pad.strokes.length && !ed) { ta.value = ""; show(); } pad.fit(); pad.status(); }
-  };
   let tmr = 0, seq = 0;
   const show = async () => {
     const n = ++seq, tex = ta.value.trim();
@@ -3061,8 +3041,6 @@ function openEqPanel(edSt) {
   };
   panel.onclick = e => {
     const b = e.target.closest("button"); if (!b) return;
-    if (b.dataset.mode) { setMode(b.dataset.mode); return; }
-    if (b.dataset.p) { pad.cmd(b.dataset.p); return; }
     if (b.dataset.k) { const t = EQ_KEYS[+b.dataset.k][1], a = ta.selectionStart, z = ta.selectionEnd; ta.setRangeText(t + (/^\\[a-zA-Z]+$/.test(t) ? " " : ""), a, z, "end"); ta.focus(); later(); }
     else if (b.dataset.z) { cfg.size = +b.dataset.z; panel.querySelectorAll("[data-z]").forEach(x => x.setAttribute("aria-pressed", x === b)); show(); }
     else if (b.dataset.c) { cfg.color = b.dataset.c; panel.querySelectorAll("[data-c]").forEach(x => x.setAttribute("aria-pressed", x === b)); show(); }
@@ -3070,70 +3048,7 @@ function openEqPanel(edSt) {
     else if (b.dataset.a === "cancel") closePanel();
   };
   panel.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ok(); } else if (e.key === "Escape") closePanel(); });
-  document.body.appendChild(panel); setMode(mode); if (mode === "kb") { ta.focus(); ta.select(); } show();
-}
-/* handwriting pad: strokes → MyScript cloud recognition (the user's own free developer keys) → LaTeX */
-const MS_KEYS = () => { try { return JSON.parse(localStorage.getItem("carnet-myscript") || "null"); } catch (e) { return null; } };
-function eqPad(panel, onTex) {
-  const cv = panel.querySelector("#eqCv"), stat = panel.querySelector("#eqStat"), box = panel.querySelector("#eqKeysBox");
-  const P = { strokes: [], cur: null, tmr: 0, seq: 0 };
-  const ctx = cv.getContext("2d");
-  P.fit = () => { const r = cv.getBoundingClientRect(); if (!r.width) return; const d = devicePixelRatio || 1; cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d); ctx.setTransform(d, 0, 0, d, 0, 0); draw(); };
-  const draw = () => {
-    ctx.clearRect(0, 0, cv.width, cv.height); ctx.lineCap = ctx.lineJoin = "round"; ctx.strokeStyle = "#1d1d1f"; ctx.lineWidth = 2.6;
-    for (const s of P.strokes.concat(P.cur ? [P.cur] : [])) { ctx.beginPath(); s.x.forEach((x, i) => i ? ctx.lineTo(x, s.y[i]) : ctx.moveTo(x, s.y[i])); if (s.x.length === 1) ctx.lineTo(s.x[0] + .1, s.y[0]); ctx.stroke(); }
-  };
-  P.status = () => {
-    const k = MS_KEYS();
-    if (!k) {
-      stat.textContent = "";
-      box.innerHTML = `<p style="margin:0 0 6px">La reconnaissance utilise MyScript (gratuit avec un compte développeur). Créez un compte sur <a href="https://developer.myscript.com/" target="_blank" rel="noopener">developer.myscript.com</a>, puis collez ici votre clé d'application et votre clé HMAC. Seule l'encre de l'équation est envoyée, jamais le PDF.</p>
-        <label class="flab">Clé d'application<input class="fin" id="msApp" autocomplete="off" spellcheck="false"></label>
-        <label class="flab">Clé HMAC<input class="fin" id="msHmac" autocomplete="off" spellcheck="false"></label>
-        <button type="button" class="btn" data-p="keys">Enregistrer les clés</button>`;
-    } else { box.innerHTML = `<p style="margin:0;font-size:11.5px">Reconnaissance MyScript active. <a href="#" data-p="forget">Changer de clés</a></p>`; if (!stat.textContent) stat.textContent = P.strokes.length ? "" : "Écrivez dans la zone blanche."; }
-  };
-  P.cmd = c => {
-    if (c === "undo") { P.strokes.pop(); draw(); later(); }
-    else if (c === "clear") { P.strokes = []; draw(); onTex(""); stat.textContent = "Écrivez dans la zone blanche."; }
-    else if (c === "keys") {
-      const a = box.querySelector("#msApp").value.trim(), h = box.querySelector("#msHmac").value.trim();
-      if (!a || !h) { toast("Collez les deux clés MyScript."); return; }
-      try { localStorage.setItem("carnet-myscript", JSON.stringify({ app: a, hmac: h })); } catch (e) {}
-      P.status(); later();
-    }
-  };
-  box.addEventListener("click", e => { const a = e.target.closest('[data-p="forget"]'); if (a) { e.preventDefault(); try { localStorage.removeItem("carnet-myscript"); } catch (err) {} P.status(); } });
-  const pt = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-  cv.addEventListener("pointerdown", e => { if (e.button > 0 && e.pointerType === "mouse") return; e.preventDefault(); cv.setPointerCapture(e.pointerId); clearTimeout(P.tmr); const [x, y] = pt(e); P.cur = { x: [x], y: [y], t: [Date.now()] }; draw(); });
-  cv.addEventListener("pointermove", e => { if (!P.cur) return; for (const q of (e.getCoalescedEvents ? e.getCoalescedEvents() : [e])) { const [x, y] = pt(q); P.cur.x.push(x); P.cur.y.push(y); P.cur.t.push(Date.now()); } draw(); });
-  const end = () => { if (!P.cur) return; P.strokes.push(P.cur); P.cur = null; draw(); later(); };
-  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
-  const later = () => { clearTimeout(P.tmr); P.tmr = setTimeout(recognize, 450); };
-  async function recognize() {
-    if (!P.strokes.length) return;
-    const k = MS_KEYS(); if (!k) { stat.textContent = "Ajoutez vos clés MyScript ci-dessous pour lancer la reconnaissance."; return; }
-    const n = ++P.seq; stat.textContent = "Reconnaissance…";
-    try { const tex = await myScriptMath(P.strokes, cv.clientWidth, cv.clientHeight, k); if (n !== P.seq) return; stat.textContent = tex ? "Reconnu. Corrigez au clavier si besoin." : "Rien de reconnu pour l'instant."; if (tex) onTex(tex); }
-    catch (e) { if (n === P.seq) stat.textContent = e.message; }
-  }
-  return P;
-}
-async function myScriptMath(strokes, w, h, k) {
-  const body = JSON.stringify({
-    contentType: "Math", xDPI: 96, yDPI: 96, width: Math.round(w), height: Math.round(h),
-    configuration: { math: { mimeTypes: ["application/x-latex"], solver: { enable: false } }, export: { jiix: { strokes: false } } },
-    strokeGroups: [{ strokes: strokes.map(s => ({ x: s.x.map(v => +v.toFixed(1)), y: s.y.map(v => +v.toFixed(1)), t: s.t, pointerType: "PEN" })) }]
-  });
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(k.app + k.hmac), { name: "HMAC", hash: "SHA-512" }, false, ["sign"]);
-  const sig = [...new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)))].map(b => b.toString(16).padStart(2, "0")).join("");
-  let r;
-  try { r = await fetch("https://cloud.myscript.com/api/v4.0/iink/batch", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/x-latex,application/json", applicationKey: k.app, hmac: sig }, body }); }
-  catch (e) { throw new Error("Pas de connexion à MyScript : la reconnaissance au stylet a besoin d'Internet."); }
-  if (r.status === 401 || r.status === 403) throw new Error("MyScript refuse les clés : vérifiez la clé d'application et la clé HMAC.");
-  if (r.status === 429) throw new Error("Quota MyScript du mois atteint.");
-  if (!r.ok) throw new Error("MyScript a répondu par une erreur (" + r.status + ").");
-  return (await r.text()).trim().replace(/^\\\[|\\\]$/g, "").trim();
+  document.body.appendChild(panel); ta.focus(); ta.select(); show();
 }
 function placeEquation(im, eq, ed) {
   pushHistory();
