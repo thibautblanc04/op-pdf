@@ -298,6 +298,14 @@ body.tool-text .forms .ff,body.tool-hand .forms .ff{pointer-events:auto}
 .wrow b{display:block;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wrow small{display:block;font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wrow div{min-width:0}
+.wrow.dir svg{fill:var(--accent-soft)}
+.wcrumbs{display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin:0 0 10px;font-size:13px}
+.wcrumbs button{border:0;background:transparent;color:var(--accent);font:600 13px var(--f-ui);padding:5px 9px;border-radius:999px;cursor:pointer}
+.wcrumbs button:hover{background:var(--accent-soft)}
+.wcrumbs button[aria-current="true"]{color:var(--ink);cursor:default;background:transparent}
+.wcrumbs .sep{color:var(--muted)}
+.wcrumbs .up{width:30px;height:30px;padding:0;display:grid;place-items:center;margin-right:4px}
+.wcrumbs .up svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .keys button.kb{font-family:var(--f-mono);font-size:11.5px;background:var(--accent-soft);border:0;border-radius:8px;padding:4px 10px;min-width:44px;cursor:pointer;color:var(--ink);justify-self:start}
 .keys button.kb.wait{background:var(--accent);color:var(--on-accent)}
 .qrow .grp{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -1522,7 +1530,7 @@ async function pickFile() {
     try {
       const opts = { types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }] };
       let h;
-      try { [h] = await window.showOpenFilePicker({ ...opts, ...(workDir ? { startIn: workDir } : {}) }); }
+      try { [h] = await window.showOpenFilePicker({ ...opts, ...(workDir ? { startIn: workCur() } : {}) }); }
       catch (e) { if (e && e.name === "AbortError") return; [h] = await window.showOpenFilePicker(opts); } // stale working folder: open without it
       return loadFile(await h.getFile(), h);
     } catch (e) { if (e && e.name === "AbortError") return; console.warn("open picker", e); }
@@ -1678,7 +1686,7 @@ async function save(mode = "save") {
       if (!ok) return false;
     } else if (mode === "saveas" && window.showSaveFilePicker) {
       try {
-        const h = await window.showSaveFilePicker({ suggestedName: name, ...(workDir ? { startIn: workDir } : {}), types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }] });
+        const h = await window.showSaveFilePicker({ suggestedName: name, ...(workDir ? { startIn: workCur() } : {}), types: [{ description: "PDF", accept: { "application/pdf": [".pdf"] } }] });
         ok = await writeHandle(h, bytes); if (ok) { fileHandle = h; name = h.name; docName = h.name; $("docName").textContent = docName; if (!currentId) currentId = "d" + Date.now(); renderTabs(); }
       } catch (e) { if (e && e.name === "AbortError") return false; ok = await download(bytes, name); }
     } else ok = await download(bytes, name);
@@ -2461,20 +2469,22 @@ function fillForms(src) { // write the values into the PDF's own fields, then fi
 async function loadWorkDir() { try { workDir = (await recents.getFile("__workdir")) || null; } catch (e) { workDir = null; } renderWork(); }
 async function pickWorkDir() {
   if (!window.showDirectoryPicker) { toast("Ce navigateur ne sait pas ouvrir un dossier. Utilisez Chrome ou Edge sur ordinateur, avec le fichier OP-PDF.html."); return; }
-  try { workDir = await window.showDirectoryPicker({ id: "op-pdf-dossier", mode: "readwrite" }); await recents.putFile("__workdir", workDir); renderWork(); }
+  try { workDir = await window.showDirectoryPicker({ id: "op-pdf-dossier", mode: "readwrite" }); workPath = []; await recents.putFile("__workdir", workDir); renderWork(); }
   catch (e) { if (!e || e.name !== "AbortError") toast("Ce dossier n'a pas pu être ouvert ici. Ouvrez OP-PDF.html directement dans Chrome ou Edge."); }
 }
-async function listPdfs(dir, prefix = "", depth = 0, out = []) {
+async function listPdfs(dir, prefix = "", depth = 0, out = [], max = 6) {
   for await (const [name, h] of dir.entries()) {
     if (out.length >= 300) break;
     if (h.kind === "file" && /\.pdf$/i.test(name)) out.push({ name, path: prefix, h });
-    else if (h.kind === "directory" && depth < 2 && !name.startsWith(".")) await listPdfs(h, prefix + name + " › ", depth + 1, out);
+    else if (h.kind === "directory" && depth < max && !name.startsWith(".")) await listPdfs(h, prefix + name + " › ", depth + 1, out, max);
   }
   return out;
 }
+let workPath = []; // sub-folders opened below the working folder
+const workCur = () => workPath.length ? workPath[workPath.length - 1] : workDir;
 async function renderWork() {
   const box = $("work"); if (!box) return;
-  $("wName").textContent = workDir ? "📁 " + workDir.name : "";
+  $("wName").textContent = "";
   $("wPick").textContent = workDir ? "Changer de dossier…" : "Choisir un dossier…"; $("wRefresh").hidden = !workDir;
   if (!workDir) { box.innerHTML = '<div class="empty">Choisissez votre dossier OneDrive ou Google Drive : ses PDF s\'affichent ici et s\'enregistrent directement dedans. OP PDF n\'envoie rien en ligne, c\'est l\'application OneDrive ou Drive de l\'ordinateur qui synchronise. Fonctionne dans Chrome ou Edge sur ordinateur.</div>'; return; }
   let perm = "prompt"; try { perm = await workDir.queryPermission({ mode: "readwrite" }); } catch (e) {}
@@ -2483,21 +2493,46 @@ async function renderWork() {
     b.onclick = async () => { try { if ((await workDir.requestPermission({ mode: "readwrite" })) === "granted") renderWork(); } catch (e) { toast("Accès refusé par le navigateur."); } };
     box.appendChild(b); return;
   }
+  const cur = workCur(), q = ($("rSearch").value || "").trim().toLowerCase();
   box.innerHTML = '<div class="empty">Lecture du dossier…</div>';
-  let files = [];
-  try { files = await listPdfs(workDir); } catch (e) { box.innerHTML = '<div class="empty">Ce dossier n\'est plus accessible. Choisissez-le de nouveau.</div>'; return; }
-  const q = ($("rSearch").value || "").trim().toLowerCase();
-  files = files.filter(f => !q || f.name.toLowerCase().includes(q)).sort((a, b) => (a.path + a.name).localeCompare(b.path + b.name, "fr", { numeric: true }));
-  if (!files.length) { box.innerHTML = '<div class="empty">' + (q ? "Aucun PDF du dossier ne correspond." : "Aucun PDF dans ce dossier pour l'instant. « Enregistrer sous » vous propose ce dossier.") + '</div>'; return; }
+  // breadcrumb: working folder › sub › sub
+  const crumbs = document.createElement("div"); crumbs.className = "wcrumbs";
+  if (workPath.length) { const up = document.createElement("button"); up.type = "button"; up.className = "up glass"; up.title = "Dossier parent"; up.setAttribute("aria-label", "Dossier parent"); up.innerHTML = '<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>'; up.onclick = () => { workPath.pop(); renderWork(); }; crumbs.appendChild(up); }
+  [workDir, ...workPath].forEach((d, k, all) => {
+    if (k) { const sp = document.createElement("span"); sp.className = "sep"; sp.textContent = "›"; crumbs.appendChild(sp); }
+    const b = document.createElement("button"); b.type = "button"; b.textContent = (k ? "" : "📁 ") + d.name;
+    if (k === all.length - 1) b.setAttribute("aria-current", "true"); else b.onclick = () => { workPath = workPath.slice(0, k); renderWork(); };
+    crumbs.appendChild(b);
+  });
+  let dirs = [], files = [];
+  try {
+    if (q) files = (await listPdfs(cur)).filter(f => f.name.toLowerCase().includes(q)); // search: this folder and everything below
+    else for await (const [name, h] of cur.entries()) {
+      if (name.startsWith(".")) continue;
+      if (h.kind === "directory") dirs.push({ name, h });
+      else if (/\.pdf$/i.test(name)) files.push({ name, path: "", h });
+    }
+  } catch (e) { workPath = []; box.innerHTML = '<div class="empty">Ce dossier n\'est plus accessible. Choisissez-le de nouveau.</div>'; return; }
+  const cmp = (a, b) => a.localeCompare(b, "fr", { numeric: true, sensitivity: "base" });
+  dirs.sort((a, b) => cmp(a.name, b.name)); files.sort((a, b) => cmp(a.path + a.name, b.path + b.name));
+  box.innerHTML = ""; box.appendChild(crumbs);
+  if (!dirs.length && !files.length) { const e = document.createElement("div"); e.className = "empty"; e.textContent = q ? "Aucun PDF de ce dossier ne correspond." : "Ce dossier est vide. « Enregistrer sous » vous propose le dossier de travail."; box.appendChild(e); return; }
   const list = document.createElement("div"); list.className = "wlist";
-  for (const f of files.slice(0, 120)) {
+  for (const d of dirs.slice(0, 200)) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "wrow dir glass";
+    b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 6.5h6l2 2h10V19H3z"/></svg><div><b></b><small>Dossier</small></div>';
+    b.querySelector("b").textContent = d.name;
+    b.onclick = () => { workPath.push(d.h); $("rSearch").value = ""; renderWork(); };
+    list.appendChild(b);
+  }
+  for (const f of files.slice(0, 200)) {
     const b = document.createElement("button"); b.type = "button"; b.className = "wrow glass";
     b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></svg><div><b></b><small></small></div>';
-    b.querySelector("b").textContent = f.name.replace(/\.pdf$/i, ""); b.querySelector("small").textContent = f.path ? f.path.replace(/ › $/, "") : workDir.name;
+    b.querySelector("b").textContent = f.name.replace(/\.pdf$/i, ""); b.querySelector("small").textContent = f.path ? f.path.replace(/ › $/, "") : "PDF";
     b.onclick = async () => { try { await loadFile(await f.h.getFile(), f.h); } catch (e) { toast("Ce fichier n'a pas pu être lu."); } };
     list.appendChild(b);
   }
-  box.innerHTML = ""; box.appendChild(list);
+  box.appendChild(list);
 }
 $("wPick").onclick = pickWorkDir; $("wRefresh").onclick = renderWork;
 /* ---------- customizable main bar ---------- */
@@ -2790,7 +2825,7 @@ async function exportPng(p) {
 }
 async function saveBytesAs(bytes, name, type, label, ext) {
   if (window.showSaveFilePicker) {
-    try { const h = await window.showSaveFilePicker({ suggestedName: name, ...(workDir ? { startIn: workDir } : {}), types: [{ description: label, accept: { [type]: [ext] } }] }); return await writeHandle(h, bytes); }
+    try { const h = await window.showSaveFilePicker({ suggestedName: name, ...(workDir ? { startIn: workCur() } : {}), types: [{ description: label, accept: { [type]: [ext] } }] }); return await writeHandle(h, bytes); }
     catch (e) { if (e && e.name === "AbortError") return false; }
   }
   return download(bytes, name, type);
