@@ -170,7 +170,6 @@ html{--accent-c:#2f62e0}
     radial-gradient(38vmax 38vmax at 92% 30%,var(--blob-2),transparent 70%),
     radial-gradient(42vmax 42vmax at 50% 105%,var(--blob-3),transparent 70%),
     linear-gradient(180deg,var(--desk-a),var(--desk-b));
-  background-attachment:fixed;
   padding-top:calc(86px + env(safe-area-inset-top,0px));padding-bottom:140px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 #pages{display:flex;flex-direction:column;align-items:center;gap:30px;width:max-content;min-width:100%;margin:0 auto}
@@ -797,7 +796,15 @@ const vkey = p => [scale, p.extra, p.w, p.h, p.rot || 0, bgKey()].join(":");
 function newBlank(w = 595.28, h = 841.89, bg = "grid") { return { id: nid(), kind: "blank", w, h, extra: 0, bg, strokes: [] }; }
 
 const io = new IntersectionObserver(ents => {
-  for (const e of ents) { const v = e.target._v; v.shown = e.isIntersecting; if (v.shown) paintView(v); }
+  for (const e of ents) {
+    const v = e.target._v; v.shown = e.isIntersecting; clearTimeout(v.freeT);
+    if (v.shown) paintView(v);
+    else v.freeT = setTimeout(() => { // far off screen for a while: give the memory back, redrawn when it comes back
+      if (v.shown || v.task) return;
+      for (const c of [v.base, v.hl, v.ink, v.ui]) { c.width = 0; c.height = 0; }
+      v.rScale = 0; v.uiDirty = false;
+    }, 5000);
+  }
   updatePageLbl();
 }, { root: desk, rootMargin: "900px 0px" });
 
@@ -828,6 +835,7 @@ function syncDom() {
   if (ruler.on) drawRuler();
 }
 function paintView(v) {
+  if (!v.ui.width) { clearUI(v); v.uiDirty = false; }
   if (v.rScale !== vkey(v.p)) { renderBase(v); v.rScale = vkey(v.p); }
   drawInk(v);
   if (tool === "pointer") ensureTextLayer(v);
@@ -1585,14 +1593,20 @@ function openEraserPop(anchor) {
 
 /* ---------- zoom ---------- */
 const ZOOMS = [.5, .67, .8, 1, 1.25, 1.5, 2, 2.5, 3];
-function setZoom(z, cx, cy) {
+let zoomT = 0;
+function setZoom(z, cx, cy, live) { // live (wheel, pinch): stretch what is drawn now, redraw sharp once the gesture pauses
   setTimeout(updateCursor, 0);
   commitText();
   z = Math.max(.4, Math.min(3.5, z)); if (Math.abs(z - scale) < .001) return;
   const r = desk.getBoundingClientRect(); cx = cx ?? r.width / 2; cy = cy ?? r.height / 2;
   const fx = (desk.scrollLeft + cx) / scale, fy = (desk.scrollTop + cy) / scale;
   scale = z; $("zoomLbl").textContent = Math.round(z * 100) + " %";
-  syncDom();
+  clearTimeout(zoomT);
+  if (live) {
+    for (const v of views.values()) layout(v);
+    if (selBar) { selBar.remove(); selBar = null; }
+    zoomT = setTimeout(syncDom, 160);
+  } else syncDom();
   desk.scrollLeft = fx * scale - cx; desk.scrollTop = fy * scale - cy;
 }
 function stepZoom(dir) { const i = ZOOMS.findIndex(z => z >= scale - .001); const n = dir > 0 ? ZOOMS.find(z => z > scale + .01) : [...ZOOMS].reverse().find(z => z < scale - .01); setZoom(n ?? scale); }
@@ -1602,7 +1616,7 @@ function fitWidth() {
 }
 desk.addEventListener("wheel", e => {
   if (!e.ctrlKey && !e.metaKey) return; e.preventDefault();
-  const r = desk.getBoundingClientRect(); setZoom(scale * Math.exp(-e.deltaY * .0025), e.clientX - r.left, e.clientY - r.top);
+  const r = desk.getBoundingClientRect(); setZoom(scale * Math.exp(-e.deltaY * .0025), e.clientX - r.left, e.clientY - r.top, true);
 }, { passive: false });
 function updatePageLbl() {
   const mid = desk.scrollTop + desk.clientHeight / 3; let idx = 0;
@@ -2603,7 +2617,7 @@ async function closeTab(t) { if (t !== activeTab) switchTab(t); closeDoc(); }
     const P = pin; pin = null; pagesEl.style.transform = ""; pagesEl.style.transformOrigin = "";
     const r = desk.getBoundingClientRect();
     desk.scrollLeft -= P.dx; desk.scrollTop -= P.dy;
-    setZoom(P.s0 * P.k, P.mx - r.left, P.my - r.top);
+    setZoom(P.s0 * P.k, P.mx - r.left, P.my - r.top, true);
   };
   desk.addEventListener("touchend", endPin); desk.addEventListener("touchcancel", endPin);
   window.addEventListener("touchend", e => { if (!e.touches.length) touches = 0; }, true);
