@@ -1,5 +1,5 @@
 // OP PDF: keeps the app and its two libraries available offline. Nothing is uploaded.
-const CACHE = "op-pdf-2f6dea624e";
+const CACHE = "op-pdf-dafc84d776";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
@@ -10,5 +10,5 @@ self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   // the page itself: network first so updates arrive, cache when offline
   if (e.request.mode === "navigate") { e.respondWith(fetch(e.request, { cache: "no-cache" }).then(r => { const c = r.clone(); caches.open(CACHE).then(k => k.put("index.html", c)); return r; }).catch(() => caches.match("index.html"))); return; }
-  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(r => { if (r.ok && (e.request.url.startsWith(self.location.origin) || e.request.url.includes("cdnjs") || e.request.url.includes("fonts.g"))) { const c = r.clone(); caches.open(CACHE).then(k => k.put(e.request, c)); } return r; })));
+  e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request).then(r => { if (r.ok && (e.request.url.startsWith(self.location.origin) || e.request.url.includes("cdnjs") || e.request.url.includes("cdn.jsdelivr.net/npm/mathjax") || e.request.url.includes("fonts.g"))) { const c = r.clone(); caches.open(CACHE).then(k => k.put(e.request, c)); } return r; })));
 });

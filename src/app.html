@@ -121,7 +121,7 @@ button,input,select{font:inherit;color:inherit}
 .pop{position:fixed;z-index:27;border-radius:24px;padding:12px;width:272px;max-width:calc(100vw - 16px);display:flex;flex-direction:column;gap:12px;background:var(--glass-strong)}
 .pop h3{margin:0;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .ptabs{display:flex;background:var(--accent-soft);border-radius:999px;padding:2px}
-.ptabs button{flex:1;border:0;background:transparent;border-radius:999px;height:32px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}
+.ptabs button{flex:1;border:0;padding:0 7px;white-space:nowrap;background:transparent;border-radius:999px;height:32px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}
 .ptabs button[aria-pressed="true"]{background:var(--glass-strong);box-shadow:0 1px 4px rgba(0,0,0,.15)}
 .pcolors{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;justify-items:center}
 .psizes{display:flex;flex-wrap:wrap;gap:4px}
@@ -203,6 +203,16 @@ body.tool-pointer .page .textLayer{display:block}
 .dock.summoned{animation:pop .18s ease-out}
 @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
 .panel{position:fixed;z-index:26;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100vw - 32px));max-height:calc(100% - 40px);overflow:auto;border-radius:28px;padding:18px 18px 14px;background:var(--glass-strong)}
+.panel .fin{display:block;width:100%;box-sizing:border-box;margin:4px 0 10px;padding:9px 12px;border-radius:12px;border:1px solid var(--line,rgba(0,0,0,.14));background:var(--glass,rgba(255,255,255,.6));color:var(--ink);font:14px var(--f-ui,system-ui)}
+.panel textarea.fin{font:14px/1.45 var(--f-mono,ui-monospace,monospace);resize:vertical;min-height:64px}
+.panel .flab{display:block;font-size:12px;font-weight:700;color:var(--muted)}
+.eqkeys{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 6px}
+.eqkeys button{min-width:34px;height:30px;padding:0 8px;border:0;border-radius:9px;background:var(--accent-soft);color:var(--ink);font:600 13px var(--f-ui,system-ui);cursor:pointer}
+.eqkeys button:hover{filter:brightness(.95)}
+.eqprev{min-height:70px;display:flex;align-items:center;justify-content:center;padding:10px;border-radius:14px;background:#fff;border:1px solid rgba(0,0,0,.08);overflow:auto;margin-bottom:10px}
+.eqprev svg{max-width:100%;height:auto}
+.eqprev .eqerr{color:#c62828;font-size:12.5px}
+body.onlink .page,body.onlink .page *{cursor:pointer!important}
 .panel h2{margin:0 0 4px;font-size:17px;font-weight:700;letter-spacing:-.01em}
 .panel p{margin:0 0 12px;font-size:12.5px;color:var(--muted);line-height:1.5}
 .prow{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--glass-line)}
@@ -512,7 +522,7 @@ body.at-home .desk,body.at-home .dock,body.at-home .view-only{display:none!impor
 const pdfjs = window.pdfjsLib;
 // Worker script is loaded above as a plain <script>; pdf.js then runs it on the main thread.
 pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-const { PDFDocument, rgb, StandardFonts, BlendMode, LineCapStyle, degrees, PDFName, PDFHexString } = window.PDFLib;
+const { PDFDocument, rgb, StandardFonts, BlendMode, LineCapStyle, degrees, PDFName, PDFHexString, PDFString } = window.PDFLib;
 const STD_FONTS = { helv: ["Helvetica", "HelveticaBold", "HelveticaOblique", "HelveticaBoldOblique"], times: ["TimesRoman", "TimesRomanBold", "TimesRomanItalic", "TimesRomanBoldItalic"], courier: ["Courier", "CourierBold", "CourierOblique", "CourierBoldOblique"] };
 
 const DATA_NAME = "carnet-annotations.json", ORIG_NAME = "carnet-original.pdf";
@@ -685,7 +695,17 @@ function hull(P) {
   return lo.slice(0, -1).concat(up.slice(0, -1));
 }
 const poly2d = (poly, map) => "M" + poly.map(q => { const m = map ? map(q[0], q[1]) : q; return f(m[0]) + " " + f(m[1]); }).join("L") + "Z";
+function wavePoly(x, y, w, h, t) { // filled wavy line inside a rect, waves along its long side
+  const horiz = w >= h, L = horiz ? w : h, B = horiz ? h : w, a = Math.max(0, (B - t) / 2), lam = Math.max(2.5, B * 2.2);
+  const n = Math.max(8, Math.ceil(L / lam * 12)), top = [], bot = [];
+  for (let i = 0; i <= n; i++) {
+    const u = L * i / n, c = B / 2 + a * Math.sin(2 * Math.PI * u / lam), dc = a * 2 * Math.PI / lam * Math.cos(2 * Math.PI * u / lam), k = t / 2 * Math.sqrt(1 + dc * dc);
+    top.push([u, c - k]); bot.push([u, c + k]);
+  }
+  return top.concat(bot.reverse()).map(([u, v]) => horiz ? [x + u, y + v] : [x + v, y + u]);
+}
 function hlPath(st, map) {
+  if (st.rects && st.wave) return st.rects.map(([x, y, w, h]) => poly2d(wavePoly(x, y, w, h, st.wt || Math.min(w, h) * .3), map)).join("");
   if (st.rects) return st.rects.map(([x, y, w, h]) => poly2d([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], map)).join("");
   const hw = Math.max(1, st.size * .16), hh = st.size / 2, step = Math.max(1, st.size * .25);
   const P = [];
@@ -893,7 +913,10 @@ function imgFor(src) {
 function paintStroke(ctx, st) {
   if (st.tool === "text") {
     ctx.fillStyle = st.color; ctx.font = fontCss(st, st.size); ctx.textBaseline = "alphabetic";
-    st.text.split("\n").forEach((ln, i) => ctx.fillText(ln, st.x, st.y + st.size * (.82 + i * TEXT_LH)));
+    st.text.split("\n").forEach((ln, i) => {
+      const by = st.y + st.size * (.82 + i * TEXT_LH); ctx.fillText(ln, st.x, by);
+      if (st.link && ln) ctx.fillRect(st.x, by + st.size * .12, ctx.measureText(ln).width, Math.max(.6, st.size * .06));
+    });
     return;
   }
   if (st.tool === "img") { const im = imgFor(st.src); if (im) ctx.drawImage(im, st.x, st.y, st.w, st.h); else { ctx.fillStyle = "rgba(120,130,150,.15)"; ctx.fillRect(st.x, st.y, st.w, st.h); } return; }
@@ -1080,6 +1103,7 @@ function attachPointer(v) {
       g = { t: "eraser", mode: t === "eraserStroke" ? "stroke" : t === "eraserArea" ? "area" : eraserCfg.mode, pushed: false }; eraseAt(v, g, x, y);
     } else if (t === "lasso") {
       { const ht = textHit(v.p, x, y); if (ht && textTap(ht)) { openTextEditor(v, x, y); g = null; return; } }
+      { const he = [...v.p.strokes].reverse().find(s => s.eq && x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h); if (he && textTap(he)) { g = null; openEqPanel(he); return; } }
       const b = selection && selection.pageId === v.p.id ? selBox() : null;
       const hr = 16 / scale;
       const mx = (b ? (b[0] + b[2]) / 2 : 0), my = (b ? (b[1] + b[3]) / 2 : 0);
@@ -1156,8 +1180,9 @@ function attachPointer(v) {
       const rects = G.items && G.a ? thlRects(G.items, G.a, G.b) : [];
       if (rects.length) {
         pushHistory();
-        const md = textHlCfg.mode, R = md === "hl" ? rects : rects.map(([x, y, w, h]) => { const t = Math.max(.8, h * .075); return [x, md === "under" ? y + h * .80 : y + h * .5 - t / 2, w, t]; });
+        const md = textHlCfg.mode, R = md === "hl" ? rects : rects.map(([x, y, w, h]) => { const t = Math.max(.8, h * .075); if (md === "wave") { const b = Math.max(3, h * .26); return [x, y + h * .76, w, b]; } return [x, md === "under" ? y + h * .80 : y + h * .5 - t / 2, w, t]; });
         const st = { id: nid(), tool: md === "hl" ? "thl" : "tmark", color: md === "hl" ? textHlCfg.color : textHlCfg.line, size: 0, rects: R, pts: R.map(([x, y, w, h]) => [x + w / 2, y + h / 2, .5]) };
+        if (md === "wave") { st.wave = true; st.wt = Math.max(.8, R[0][3] * .28); }
         v.p.strokes = v.p.strokes.concat([st]); drawInk(v);
       } else if (G.items && !G.items.length) toast("Cette page ne contient pas de texte sélectionnable (document scanné ?). Utilisez le surligneur à main levée.");
     }
@@ -1229,7 +1254,7 @@ function commitText() {
   if (st) v.p.strokes = v.p.strokes.filter(s => s !== st);
   if (text) {
     const m = measureText(text, size, { font, b, i });
-    const nst = { id: nid(), tool: "text", text, x, y, size, color, font, b, i, w: m.w, h: m.h, pts: [[x, y, .5], [x + m.w, y, .5], [x, y + m.h, .5], [x + m.w, y + m.h, .5], [x + m.w / 2, y + m.h / 2, .5]] };
+    const nst = { id: nid(), tool: "text", ...(st && st.link ? { link: st.link } : {}), text, x, y, size, color, font, b, i, w: m.w, h: m.h, pts: [[x, y, .5], [x + m.w, y, .5], [x, y + m.h, .5], [x + m.w, y + m.h, .5], [x + m.w / 2, y + m.h / 2, .5]] };
     v.p.strokes = v.p.strokes.concat([nst]);
     autoGrow(v.p, y + m.h);
   }
@@ -1304,10 +1329,11 @@ function drawThl(v, g) {
 }
 function openTextHlPop(anchor) {
   const hlMode = textHlCfg.mode === "hl", cur = hlMode ? textHlCfg.color : textHlCfg.line;
-  newPop(anchor, `<div class="ptabs">${[["hl", "Surligner"], ["under", "Souligner"], ["strike", "Barrer"]].map(([k, l]) => `<button type="button" data-m="${k}" aria-pressed="${textHlCfg.mode === k}">${l}</button>`).join("")}</div>
+  newPop(anchor, `<div class="ptabs">${[["hl", "Surligner"], ["under", "Souligner"], ["wave", "Vaguelettes"], ["strike", "Barrer"]].map(([k, l]) => `<button type="button" data-m="${k}" aria-pressed="${textHlCfg.mode === k}">${l}</button>`).join("")}</div>
     <div class="pcolors">${(hlMode ? HL_COLORS_ALL : PEN_COLORS_ALL).map(c => `<button type="button" class="sw" data-c="${c}" style="background:${c}" aria-label="Couleur ${c}" aria-pressed="${c === cur}"></button>`).join("")}</div>
     <label class="ptog" style="padding:0;border:0;align-items:center"><span class="colorpick"><input type="color" id="popColor" value="${cur}"></span><span>Autre couleur</span></label>
     <p style="margin:0;font-size:12px;color:var(--muted);line-height:1.45">Glissez sur le texte du PDF : le trait suit les lignes, sans déborder.</p>`);
+  pop.style.width = "316px";
   const store_ = () => { try { localStorage.setItem("carnet-texthl", JSON.stringify(textHlCfg)); } catch (e) {} updateToolIcons(); };
   const setC = c => { if (textHlCfg.mode === "hl") textHlCfg.color = c; else textHlCfg.line = c; store_(); };
   pop.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { textHlCfg.mode = b.dataset.m; store_(); openTextHlPop(anchor); });
@@ -1317,6 +1343,7 @@ function openTextHlPop(anchor) {
 function textHlIcon() {
   const m = textHlCfg.mode;
   if (m === "under") return `<path d="M6 4h12M12 4v12"/><path d="M4 20.5h16" stroke="${textHlCfg.line}" stroke-width="2.6"/>`;
+  if (m === "wave") return `<path d="M6 4h12M12 4v12"/><path d="M3.5 20.5q2.07-2.6 4.13 0t4.12 0 4.13 0 4.12 0" stroke="${textHlCfg.line}" stroke-width="2"/>`;
   if (m === "strike") return `<path d="M6 5h12M12 5v14M9.5 19h5"/><path d="M4 12.5h16" stroke="${textHlCfg.line}" stroke-width="2.6"/>`;
   return `<rect x="2.5" y="11" width="19" height="9" rx="2" fill="${textHlCfg.color}" stroke="none"/><path d="M6 5h12M12 5v14"/>`;
 }
@@ -1717,7 +1744,14 @@ async function buildPdf() {
         if (!safe) return;
         const [bx, by] = map(st.x, st.y + st.size * (.82 + i * TEXT_LH));
         pg.drawText(safe, { x: bx, y: by, size: st.size, font, color: hex(st.color), rotate: degrees(ang) });
+        if (st.link) { const yy = st.y + st.size * (.82 + i * TEXT_LH + .12), a = map(st.x, yy), b = map(st.x + font.widthOfTextAtSize(safe, st.size), yy); pg.drawLine({ start: { x: a[0], y: a[1] }, end: { x: b[0], y: b[1] }, thickness: Math.max(.6, st.size * .06), color: hex(st.color) }); }
       });
+      if (st.link) try { // a real PDF link: clickable in every reader
+        const a = map(st.x, st.y), b = map(st.x + st.w, st.y + st.h);
+        const ref = out.context.register(out.context.obj({ Type: "Annot", Subtype: "Link", Rect: [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])], Border: [0, 0, 0], F: 4, A: { Type: "Action", S: "URI", URI: PDFString.of(st.link) } }));
+        const arr = pg.node.lookup(PDFName.of("Annots"));
+        if (arr && arr.push) arr.push(ref); else pg.node.set(PDFName.of("Annots"), out.context.obj([ref]));
+      } catch (e) { console.warn("link", e); }
     }
     for (const st of p.strokes.filter(s => s.tool === "note")) { // real PDF comments, readable in any viewer
       try {
@@ -1899,6 +1933,8 @@ $("bInsert").onclick = e => { const n = currentPageIndex() + 1; openMenu(e.curre
   "-",
   { label: "Image…", run: () => $("imgIn").click() },
   { label: "Tableau…", run: openTablePanel },
+  { label: "Lien…", run: () => openLinkPanel() },
+  { label: "Équation…", run: () => openEqPanel() },
   { label: "Signature…", run: openSignPanel },
   { label: "Note (commentaire)", run: () => setTool("note") },
   { label: (ruler.on ? "✓ " : "") + "Règle", kbd: "R", run: toggleRuler },
@@ -2860,6 +2896,168 @@ function insertTable() {
   p.strokes = p.strokes.concat(add); setTool("lasso"); selection = { pageId: p.id, ids: new Set(add.map(s => s.id)) }; refresh(p);
   autoGrow(p, y0 + H);
   toast("Tableau inséré : déplacez-le ou étirez-le, puis écrivez dedans avec l'outil Texte (T).");
+}
+/* ---------- links: blue underlined text, a real link annotation in the saved PDF ---------- */
+function visibleY(p, h) { // top of the visible part of the page, below anything inserted there just before
+  const v = views.get(p.id), vis = v ? Math.max(0, (desk.scrollTop - v.el.offsetTop) / scale) : 0;
+  let y = vis + 120;
+  for (let n = 0; n < 20; n++) { const o = p.strokes.find(s => (s.tool === "img" || s.tool === "text") && s.y < y + h && s.y + s.h > y); if (!o) break; y = o.y + o.h + 12; }
+  return Math.max(20, Math.min(p.h + p.extra - h - 20, y));
+}
+function normUrl(u) {
+  u = (u || "").trim(); if (!u) return "";
+  if (/^(https?:|mailto:|tel:)/i.test(u)) return u;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return ""; // javascript:, file:… refused
+  if (/^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(u)) return "mailto:" + u;
+  return "https://" + u.replace(/^\/+/, "");
+}
+function selectedOne(pred) {
+  if (!selection || selection.ids.size !== 1) return null;
+  const p = pages.find(q => q.id === selection.pageId); const st = p && p.strokes.find(s => selection.ids.has(s.id));
+  return st && pred(st) ? { p, st } : null;
+}
+function openLinkPanel() {
+  if (!pages.length || document.body.classList.contains("at-home")) return;
+  commitText(); const ed = selectedOne(s => !!s.link);
+  closePanel(); panel = document.createElement("div"); panel.className = "panel glass"; panel.setAttribute("role", "dialog");
+  panel.innerHTML = `<h2>${ed ? "Modifier le lien" : "Insérer un lien"}</h2><p>Le lien reste cliquable dans le PDF enregistré, dans n'importe quel lecteur. Dans OP PDF, cliquez dessus avec l'outil Pointeur.</p>
+    <label class="flab">Adresse<input class="fin" id="lkUrl" type="url" placeholder="https://exemple.com  ou  nom@mail.com" autocomplete="url"></label>
+    <label class="flab">Texte affiché<input class="fin" id="lkTxt" placeholder="L'adresse, si vide"></label>
+    <div class="dlg-actions"><button type="button" class="btn" data-a="cancel">Annuler</button><button type="button" class="btn primary" data-a="ok">${ed ? "Modifier" : "Insérer"}</button></div>`;
+  const U = panel.querySelector("#lkUrl"), T = panel.querySelector("#lkTxt");
+  if (ed) { U.value = ed.st.link.replace(/^mailto:/, ""); T.value = ed.st.text; }
+  const ok = () => {
+    const url = normUrl(U.value); if (!url) { toast("Entrez une adresse web (https://…) ou un e-mail."); U.focus(); return; }
+    const text = (T.value.trim() || U.value.trim().replace(/^https?:\/\//, "")).replace(/\s*\n\s*/g, " ");
+    closePanel(); insertLink(url, text, ed);
+  };
+  panel.onclick = e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.a === "ok") ok(); else if (b.dataset.a === "cancel") closePanel(); };
+  panel.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); ok(); } else if (e.key === "Escape") closePanel(); });
+  document.body.appendChild(panel); U.focus();
+}
+function insertLink(url, text, ed) {
+  pushHistory();
+  if (ed) {
+    const m = measureText(text, ed.st.size, ed.st), { x, y } = ed.st;
+    const nst = { ...ed.st, link: url, text, w: m.w, h: m.h, pts: [[x, y, .5], [x + m.w, y, .5], [x, y + m.h, .5], [x + m.w, y + m.h, .5], [x + m.w / 2, y + m.h / 2, .5]] }; delete nst.bb;
+    ed.p.strokes = ed.p.strokes.map(s => s === ed.st ? nst : s); refresh(ed.p); toast("Lien modifié."); return;
+  }
+  const p = pages[currentPageIndex()]; if (!p) return;
+  const size = textCfg.size, fo = { font: textCfg.font, b: false, i: false }, m = measureText(text, size, fo);
+  const x = Math.max(20, (p.w - m.w) / 2), y = visibleY(p, m.h);
+  const st = { id: nid(), tool: "text", link: url, text, x, y, size, color: "#2b59c3", ...fo, w: m.w, h: m.h, pts: [[x, y, .5], [x + m.w, y, .5], [x, y + m.h, .5], [x + m.w, y + m.h, .5], [x + m.w / 2, y + m.h / 2, .5]] };
+  p.strokes = p.strokes.concat([st]); setTool("lasso"); selection = { pageId: p.id, ids: new Set([st.id]) }; refresh(p);
+  toast("Lien ajouté : déplacez-le, et cliquez dessus avec le Pointeur pour l'ouvrir.");
+}
+function linkAt(e) {
+  const el = e.target && e.target.closest && e.target.closest(".page"); if (!el) return null;
+  const v = [...views.values()].find(w => w.el === el); if (!v) return null;
+  const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / scale, y = (e.clientY - r.top) / scale;
+  return [...v.p.strokes].reverse().find(s => s.link && x >= s.x - 2 && x <= s.x + s.w + 2 && y >= s.y - 2 && y <= s.y + s.h + 2) || null;
+}
+desk.addEventListener("click", e => {
+  if (tool !== "pointer") return; const h = linkAt(e); if (!h) return;
+  const sel = window.getSelection && window.getSelection(); if (sel && !sel.isCollapsed) return;
+  window.open(h.link, "_blank", "noopener");
+});
+desk.addEventListener("mousemove", e => {
+  const h = tool === "pointer" ? linkAt(e) : null;
+  document.body.classList.toggle("onlink", !!h); if (h) e.target.title = h.link;
+});
+/* ---------- equations: LaTeX typeset by MathJax (loaded on first use), placed as a sharp image ---------- */
+const MJ_URL = "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js";
+let mjP = null;
+function loadMathJax() {
+  if (mjP) return mjP;
+  window.MathJax = { svg: { fontCache: "local" }, startup: { typeset: false }, options: { enableMenu: false } };
+  mjP = new Promise((res, rej) => {
+    const sc = document.createElement("script"); sc.src = MJ_URL; sc.async = true;
+    sc.onload = () => window.MathJax.startup.promise.then(res, rej);
+    sc.onerror = () => { mjP = null; sc.remove(); rej(new Error("MathJax")); };
+    document.head.appendChild(sc);
+  });
+  return mjP;
+}
+async function texSvg(tex) {
+  await loadMathJax();
+  const node = await window.MathJax.tex2svgPromise(tex, { display: true });
+  const errEl = node.querySelector("[data-mjx-error]");
+  return { svg: node.querySelector("svg"), err: errEl ? errEl.getAttribute("data-mjx-error") : null };
+}
+async function eqImage(tex, color, size) {
+  const { svg, err } = await texSvg(tex); if (err) throw new Error(err);
+  const EX = size * .45, w = parseFloat(svg.getAttribute("width")) * EX, h = parseFloat(svg.getAttribute("height")) * EX;
+  const k = Math.min(5, 4000 / Math.max(w, h));
+  svg.setAttribute("width", w * k); svg.setAttribute("height", h * k); svg.setAttribute("color", color); svg.removeAttribute("style");
+  const im = new Image(); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+  await im.decode();
+  const c = document.createElement("canvas"); c.width = Math.ceil(w * k); c.height = Math.ceil(h * k);
+  c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+  return { src: c.toDataURL("image/png"), w, h };
+}
+const eqCfg = { size: 18, color: "#1d1d1f" };
+try { Object.assign(eqCfg, JSON.parse(localStorage.getItem("carnet-eq") || "{}")); } catch (e) {}
+const EQ_KEYS = [["a⁄b", "\\frac{a}{b}"], ["√", "\\sqrt{x}"], ["ⁿ√", "\\sqrt[n]{x}"], ["xⁿ", "x^{n}"], ["xₙ", "x_{n}"], ["( )", "\\left( x \\right)"], ["∑", "\\sum_{i=1}^{n}"], ["∫", "\\int_{a}^{b}"], ["lim", "\\lim_{x \\to \\infty}"], ["vec", "\\vec{u}"],
+  ["α", "\\alpha"], ["β", "\\beta"], ["π", "\\pi"], ["θ", "\\theta"], ["λ", "\\lambda"], ["Δ", "\\Delta"], ["≤", "\\leq"], ["≥", "\\geq"], ["≠", "\\neq"], ["≈", "\\approx"], ["±", "\\pm"], ["×", "\\times"], ["·", "\\cdot"], ["∞", "\\infty"], ["→", "\\to"], ["⇒", "\\Rightarrow"], ["∈", "\\in"], ["ℝ", "\\mathbb{R}"],
+  ["matrice", "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"], ["système", "\\begin{cases} x + y = 1 \\\\ x - y = 0 \\end{cases}"]];
+function openEqPanel(edSt) {
+  if (!pages.length || document.body.classList.contains("at-home")) return;
+  commitText();
+  const ed = edSt ? { p: pages.find(q => q.strokes.includes(edSt)), st: edSt } : selectedOne(s => !!s.eq);
+  const cfg = ed ? { size: ed.st.eq.size, color: ed.st.eq.color } : { ...eqCfg };
+  closePanel(); panel = document.createElement("div"); panel.className = "panel glass"; panel.setAttribute("role", "dialog");
+  panel.innerHTML = `<h2>${ed ? "Modifier l'équation" : "Insérer une équation"}</h2><p>Écrivez en LaTeX, ou utilisez les boutons. L'aperçu se met à jour pendant la frappe.</p>
+    <div class="eqkeys">${EQ_KEYS.map(([l, t], i) => `<button type="button" data-k="${i}" title="${t.replace(/"/g, "&quot;")}">${l}</button>`).join("")}</div>
+    <textarea class="fin" id="eqTex" rows="3" spellcheck="false" aria-label="Équation en LaTeX"></textarea>
+    <div class="eqprev" id="eqPrev"><span class="eqerr" style="color:var(--muted)">Chargement de l'éditeur d'équations…</span></div>
+    <h3>Taille</h3><div class="ptabs" id="eqSz">${[12, 14, 18, 24, 32].map(z => `<button type="button" data-z="${z}" aria-pressed="${z === cfg.size}">${z} pt</button>`).join("")}</div>
+    <h3>Couleur</h3><div class="pcolors">${PEN_COLORS_ALL.filter(c => c !== "#ffffff").slice(0, 8).map(c => `<button type="button" class="sw" data-c="${c}" style="background:${c}" aria-label="Couleur ${c}" aria-pressed="${c === cfg.color}"></button>`).join("")}</div>
+    <div class="dlg-actions"><button type="button" class="btn" data-a="cancel">Annuler</button><button type="button" class="btn primary" data-a="ok">${ed ? "Modifier" : "Insérer"}</button></div>`;
+  const ta = panel.querySelector("#eqTex"), prev = panel.querySelector("#eqPrev");
+  ta.value = ed ? ed.st.eq.tex : "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}";
+  let tmr = 0, seq = 0;
+  const show = async () => {
+    const n = ++seq, tex = ta.value.trim();
+    if (!tex) { prev.innerHTML = '<span class="eqerr" style="color:var(--muted)">Aperçu</span>'; return; }
+    try {
+      const { svg, err } = await texSvg(tex); if (n !== seq) return;
+      prev.innerHTML = ""; if (err) { prev.innerHTML = `<span class="eqerr"></span>`; prev.firstChild.textContent = "À corriger : " + err; return; }
+      svg.style.color = cfg.color; svg.style.fontSize = Math.round(cfg.size * 1.6) + "px"; prev.appendChild(svg);
+    } catch (e) { if (n === seq) prev.innerHTML = '<span class="eqerr">L\'éditeur d\'équations n\'a pas pu se charger. Il faut Internet la première fois, ensuite il marche hors ligne.</span>'; }
+  };
+  const later = () => { clearTimeout(tmr); tmr = setTimeout(show, 200); };
+  ta.addEventListener("input", later);
+  const ok = async () => {
+    const tex = ta.value.trim(); if (!tex) { ta.focus(); return; }
+    try {
+      const im = await eqImage(tex, cfg.color, cfg.size);
+      if (!ed) { Object.assign(eqCfg, cfg); try { localStorage.setItem("carnet-eq", JSON.stringify(eqCfg)); } catch (e) {} }
+      closePanel(); placeEquation(im, { tex, size: cfg.size, color: cfg.color }, ed);
+    } catch (e) { toast(/MathJax/.test(e.message) ? "L'éditeur d'équations n'a pas pu se charger (Internet requis la première fois)." : "Équation à corriger : " + e.message); }
+  };
+  panel.onclick = e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.k) { const t = EQ_KEYS[+b.dataset.k][1], a = ta.selectionStart, z = ta.selectionEnd; ta.setRangeText(t + (/^\\[a-zA-Z]+$/.test(t) ? " " : ""), a, z, "end"); ta.focus(); later(); }
+    else if (b.dataset.z) { cfg.size = +b.dataset.z; panel.querySelectorAll("[data-z]").forEach(x => x.setAttribute("aria-pressed", x === b)); show(); }
+    else if (b.dataset.c) { cfg.color = b.dataset.c; panel.querySelectorAll("[data-c]").forEach(x => x.setAttribute("aria-pressed", x === b)); show(); }
+    else if (b.dataset.a === "ok") ok();
+    else if (b.dataset.a === "cancel") closePanel();
+  };
+  panel.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); ok(); } else if (e.key === "Escape") closePanel(); });
+  document.body.appendChild(panel); ta.focus(); ta.select(); show();
+}
+function placeEquation(im, eq, ed) {
+  pushHistory();
+  if (ed && ed.p) { // keep its place and any stretching
+    const o = ed.st, kx = o.w / (o.eq.w || o.w), ky = o.h / (o.eq.h || o.h), w = im.w * kx, h = im.h * ky, x = o.x, y = o.y;
+    const nst = { ...o, src: im.src, w, h, eq: { ...eq, w: im.w, h: im.h }, pts: [[x, y, .5], [x + w, y, .5], [x, y + h, .5], [x + w, y + h, .5], [x + w / 2, y + h / 2, .5]] }; delete nst.bb;
+    ed.p.strokes = ed.p.strokes.map(s => s === o ? nst : s); setTool("lasso"); selection = { pageId: ed.p.id, ids: new Set([nst.id]) }; refresh(ed.p); return;
+  }
+  const p = pages[currentPageIndex()]; if (!p) return;
+  const { w, h } = im, x = Math.max(10, (p.w - w) / 2), y = visibleY(p, h);
+  const st = { id: nid(), tool: "img", src: im.src, x, y, w, h, size: 0, eq: { ...eq, w, h }, pts: [[x, y, .5], [x + w, y, .5], [x, y + h, .5], [x + w, y + h, .5], [x + w / 2, y + h / 2, .5]] };
+  p.strokes = p.strokes.concat([st]); setTool("lasso"); selection = { pageId: p.id, ids: new Set([st.id]) }; refresh(p); autoGrow(p, y + h);
+  toast("Équation ajoutée : déplacez-la ou étirez-la. Double-cliquez dessus pour la modifier.");
 }
 /* ---------- signature: drawn once, reused on every document ---------- */
 let signature = null; try { signature = JSON.parse(localStorage.getItem("carnet-sign") || "null"); } catch (e) {}
