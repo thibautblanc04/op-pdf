@@ -1967,6 +1967,7 @@ const PEN_DEFAULT = [
   { id: "b1", name: "Bouton 1", hint: "bouton du bas, près de la pointe", mask: 2, action: "eraser" },
   { id: "b2", name: "Bouton 2", hint: "bouton du haut", mask: 4, action: "toolbar" },
   { id: "tail", name: "Bout gomme", hint: "arrière du stylet, s'il en a un", mask: 32, action: "eraser" },
+  { id: "dbl", name: "Double appui", hint: "appuyez deux fois vite sur le bouton 1, stylet au-dessus de l'écran", mask: 0, dbl: true, action: "toolbar" },
 ];
 let penSlots = PEN_DEFAULT.map(o => ({ ...o }));
 try { const sv = JSON.parse(store.get("carnet-pen") || "null"); if (Array.isArray(sv)) penSlots = PEN_DEFAULT.map(d => ({ ...d, ...(sv.find(x => x.id === d.id) || {}) })); } catch (e) {}
@@ -1976,8 +1977,25 @@ function savePen() { store.set("carnet-pen", JSON.stringify(penSlots.map(({ id, 
 function penSlotFor(e) {
   const b = e.buttons & ~1;
   if (!b && e.button !== 5) return null;
-  return penSlots.find(s => b & s.mask) || (e.button === 5 ? penSlots.find(s => s.mask & 32) : null);
+  return penSlots.find(s => !s.dbl && (b & s.mask)) || (e.button === 5 ? penSlots.find(s => !s.dbl && (s.mask & 32)) : null);
 }
+/* double press of button 1: for pens whose two buttons send the same signal to the browser */
+let penBtnPrev = 0, penBtnLast = 0, penBtnEdge = 0;
+function penButtonEdge(e) {
+  if (e.pointerType !== "pen" || learning) return;
+  const b1 = penSlots.find(s => s.id === "b1"), dbl = penSlots.find(s => s.dbl);
+  const m = (b1 && b1.mask) || 2, on = (e.buttons & m) ? 1 : 0, rising = on && !penBtnPrev; penBtnPrev = on;
+  if (!rising || !dbl || dbl.action === "none") return;
+  const now = performance.now(); if (now - penBtnEdge < 60) return; penBtnEdge = now;
+  if (now - penBtnLast < 450) { penBtnLast = 0; runPenAction(dbl.action, e.clientX, e.clientY); } else penBtnLast = now;
+}
+function runPenAction(a, x, y) {
+  if (a === "toolbar") summonDock(x, y);
+  else if (a === "undo") undo();
+  else if (a === "eraserStroke" || a === "eraserArea") { eraserCfg.mode = a === "eraserArea" ? "area" : "stroke"; saveEraser(); setTool("eraser"); }
+  else if (a !== "none") setTool(a);
+}
+["pointerdown", "pointermove", "pointerup"].forEach(ev => window.addEventListener(ev, penButtonEdge, true));
 const maskName = m => ({ 2: "bit 2 · clic droit", 4: "bit 4 · clic milieu", 8: "bit 8", 16: "bit 16", 32: "bit 32 · gomme" }[m] || "bit " + m);
 /* quick bar: pops up where the pen touches with button 2. Holds any mix of tools,
    including several pens of different colours (each a saved colour + thickness). */
@@ -2126,8 +2144,8 @@ function renderPanel() {
     <p>Choisissez ce que fait chaque bouton quand il est maintenu pendant que la pointe touche l'écran. Si un bouton ne réagit pas, cliquez sur « Détecter » puis touchez l'écran en le maintenant.</p>
     ${penSlots.map(s => `<div class="prow"><b>${s.name}</b><div class="ctl">
       <select data-slot="${s.id}" aria-label="Action du ${s.name}">${ACTIONS.map(([v, l]) => `<option value="${v}"${v === s.action ? " selected" : ""}>${l}</option>`).join("")}</select>
-      <button type="button" class="chip${learning === s ? " on" : ""}" data-learn="${s.id}">${learning === s ? "Touchez l'écran…" : "Détecter"}</button></div>
-      <small>${s.hint} · ${s.mask ? maskName(s.mask) : "non attribué"}</small></div>`).join("")}
+      ${s.dbl ? "" : `<button type="button" class="chip${learning === s ? " on" : ""}" data-learn="${s.id}">${learning === s ? "Touchez l'écran…" : "Détecter"}</button>`}</div>
+      <small>${s.dbl ? s.hint + ". Utile si votre stylet envoie le même signal pour ses deux boutons." : s.hint + " · " + (s.mask ? maskName(s.mask) : "non attribué")}</small></div>`).join("")}
     <label class="ptog"><input type="checkbox" id="dockOnlyBtn"${dockMode === "button" ? " checked" : ""}><span>Masquer la barre d'outils principale et n'utiliser que la barre rapide du bouton du stylet. Son contenu se règle dans Affichage.</span></label>
     <div class="pfoot"><button type="button" class="btn" data-a="reset">Réglages d'origine</button><button type="button" class="btn primary" data-a="close">Terminé</button></div>`;
   panel.querySelectorAll("select").forEach(sel => sel.onchange = () => { penSlots.find(s => s.id === sel.dataset.slot).action = sel.value; savePen(); });
