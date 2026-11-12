@@ -13,6 +13,7 @@
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
   ],
+  "launch_handler": { "client_mode": ["focus-existing", "auto"] },
   "file_handlers": [
     { "action": "./", "accept": { "application/pdf": [".pdf"] } }
   ]

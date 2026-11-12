@@ -3636,7 +3636,7 @@ document.querySelectorAll("[data-start]").forEach(b => b.onclick = async () => {
 setTool("pen"); updateUndo(); applyDockMode(); applyDockPrefs();
 showHome(); loadWorkDir(); renderTips();
 // installed app: PDFs opened with "Ouvrir avec OP PDF" arrive here
-if ("launchQueue" in window) try { window.launchQueue.setConsumer(async lp => { for (const h of lp.files || []) await loadFile(await h.getFile(), h); }); } catch (e) {}
+if ("launchQueue" in window) try { window.launchQueue.setConsumer(async lp => { if (lp.files && lp.files.length) try { window.focus(); } catch (e) {} for (const h of lp.files || []) await loadFile(await h.getFile(), h); }); } catch (e) {} // with launch_handler focus-existing, a PDF opened from Windows lands here as a new tab
 })();
 </script>
 
