@@ -546,9 +546,10 @@ let pdfDoc = null, origBytes = null, docName = "exemple.pdf";
 let pages = [];               // {id, kind:'pdf'|'blank', pdfIndex, w, h, extra, bg, strokes, vp1}
 let views = new Map();        // id -> view
 let scale = 1, tool = "pen";
-const prefs = Object.assign({ palm: true, keys: {}, dockHide: [], dockOrder: [], shapes: true, bg: "plain", accent: "blue", touch: "auto", ps: 1, sm: 0, hlStraight: true, night: false, autoFile: true, finger: null },
+const prefs = Object.assign({ palm: true, keys: {}, dockHide: [], dockOrder: [], shapes: true, bg: "plain", accent: "blue", touch: "auto", ps: .5, sm: 1, hlStraight: true, night: false, autoFile: true, finger: null },
   (() => { try { return JSON.parse(localStorage.getItem("carnet-prefs") || "{}"); } catch (e) { return {}; } })());
 const savePrefs = () => { try { localStorage.setItem("carnet-prefs", JSON.stringify(prefs)); } catch (e) {} };
+if (!(prefs.defV >= 2)) { prefs.ps = .5; prefs.sm = 1; prefs.defV = 2; savePrefs(); } // 2026-11: new defaults (pressure in the middle, light smoothing) applied once
 const coarse = () => window.matchMedia && matchMedia("(pointer: coarse)").matches;
 // finger drawing is off by default (the finger scrolls, the pen or mouse writes)
 let pside = null; const find = { hits: [], i: 0, q: "" };
