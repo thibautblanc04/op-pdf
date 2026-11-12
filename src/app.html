@@ -546,11 +546,11 @@ const prefs = Object.assign({ palm: true, keys: {}, dockHide: [], dockOrder: [],
   (() => { try { return JSON.parse(localStorage.getItem("carnet-prefs") || "{}"); } catch (e) { return {}; } })());
 const savePrefs = () => { try { localStorage.setItem("carnet-prefs", JSON.stringify(prefs)); } catch (e) {} };
 const coarse = () => window.matchMedia && matchMedia("(pointer: coarse)").matches;
-// finger drawing is off by default on touch tablets (the finger scrolls, the pen writes)
+// finger drawing is off by default (the finger scrolls, the pen or mouse writes)
 let pside = null; const find = { hits: [], i: 0, q: "" };
 let tabs = [], activeTab = null, formVals = {}, penDown = false, touches = 0, workDir = null;
 const ruler = { on: false, x: 0, y: 0, ang: 0, len: 640, hh: 38 };
-let fingerDraw = prefs.finger === null ? !coarse() : prefs.finger, penSeen = false;
+let fingerDraw = prefs.finger === true, penSeen = false; // the finger scrolls unless "Dessiner au doigt" is turned on (Affichage)
 const toolCfg = { pen: { color: PEN_COLORS[0], size: 2 }, hl: { color: HL_COLORS[0], size: 14 } };
 let undoStack = [], redoStack = [], dirty = false;
 let selection = null;          // {pageId, ids:Set}
