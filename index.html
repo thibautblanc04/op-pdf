@@ -1275,8 +1275,7 @@ function openTextEditor(v, x, y) {
   const fit = () => { if (!editing || editing.ta !== ta) return; const E = editing; ta.style.font = fontCss(E, E.size * scale); ta.style.lineHeight = TEXT_LH; ta.style.color = E.color; const m = measureText(ta.value || " ", E.size, E); ta.style.width = (m.w + E.size * .6) * scale + "px"; ta.style.height = m.h * scale + "px";
     const pad = 5; Object.assign(fr.style, { left: E.x * scale - pad + "px", top: E.y * scale - pad + "px", width: (m.w + E.size * .6) * scale + 2 * pad + "px", height: m.h * scale + 2 * pad + "px" }); };
   // dashed frame + grip: hold and drag to move the text while writing it
-  const fr = document.createElement("div"); fr.className = "tframe"; fr.title = "Maintenir pour déplacer le texte";
-  fr.innerHTML = '<span class="tgrip"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg></span>';
+  const fr = document.createElement("div"); fr.className = "tframe"; fr.title = "Maintenir le cadre pour déplacer le texte";
   ta.classList.add("framed"); editing.fr = fr;
   let drag = null;
   fr.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); if (!editing || editing.ta !== ta) return; drag = { sx: e.clientX, sy: e.clientY, x: editing.x, y: editing.y }; try { fr.setPointerCapture(e.pointerId); } catch (err) {} });
