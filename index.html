@@ -1608,6 +1608,11 @@ function setZoom(z, cx, cy, live) { // live (wheel, pinch): stretch what is draw
   commitText();
   z = Math.max(.4, Math.min(3.5, z)); if (Math.abs(z - scale) < .001) return;
   const r = desk.getBoundingClientRect(); cx = cx ?? r.width / 2; cy = cy ?? r.height / 2;
+  // anchor: the page point under (cx, cy) stays under it; the page only recentres when it becomes narrower than the window
+  const X = r.left + cx, Y = r.top + cy;
+  let av = null, ad = 1e9;
+  for (const v of views.values()) { const b = v.el.getBoundingClientRect(); if (!b.height) continue; const d = Y < b.top ? b.top - Y : Y > b.bottom ? Y - b.bottom : 0; if (d < ad) { ad = d; av = v; } }
+  const b0 = av && av.el.getBoundingClientRect(), px = av ? (X - b0.left) / scale : 0, py = av ? (Y - b0.top) / scale : 0;
   const fx = (desk.scrollLeft + cx) / scale, fy = (desk.scrollTop + cy) / scale;
   scale = z; $("zoomLbl").textContent = Math.round(z * 100) + " %";
   clearTimeout(zoomT);
@@ -1616,7 +1621,8 @@ function setZoom(z, cx, cy, live) { // live (wheel, pinch): stretch what is draw
     if (selBar) { selBar.remove(); selBar = null; }
     zoomT = setTimeout(syncDom, 160);
   } else syncDom();
-  desk.scrollLeft = fx * scale - cx; desk.scrollTop = fy * scale - cy;
+  if (av) { const b1 = av.el.getBoundingClientRect(); desk.scrollLeft += b1.left + px * scale - X; desk.scrollTop += b1.top + py * scale - Y; }
+  else { desk.scrollLeft = fx * scale - cx; desk.scrollTop = fy * scale - cy; }
 }
 function stepZoom(dir) { const i = ZOOMS.findIndex(z => z >= scale - .001); const n = dir > 0 ? ZOOMS.find(z => z > scale + .01) : [...ZOOMS].reverse().find(z => z < scale - .01); setZoom(n ?? scale); }
 function fitWidth() {
