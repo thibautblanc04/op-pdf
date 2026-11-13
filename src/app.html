@@ -168,7 +168,7 @@ html{--accent-c:#2f62e0}
     linear-gradient(180deg,var(--desk-a),var(--desk-b));
   padding-top:calc(86px + env(safe-area-inset-top,0px));padding-bottom:140px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-#pages{display:flex;flex-direction:column;align-items:center;gap:30px;width:max-content;min-width:100%;margin:0 auto}
+#pages{display:flex;flex-direction:column;align-items:center;gap:30px;width:max-content;min-width:100%;margin:0 auto;padding:50vh 85vw 70vh} /* free space around the pages: zooming never pulls the page back to the centre */
 .page{position:relative;background:var(--paper);box-shadow:var(--shadow);flex:none;border-radius:2px}
 .page canvas{position:absolute;left:0;top:0;width:100%}
 .page .c-hl,.page .c-ui{mix-blend-mode:multiply}
@@ -1692,7 +1692,7 @@ function resetDoc() {
   for (const v of views.values()) { io.unobserve(v.el); v.el.remove(); } views.clear();
   undoStack = []; redoStack = []; selection = null; dirty = false; updateUndo();
   $("docName").textContent = docName;
-  syncDom(); fitWidth(); desk.scrollTop = 0; desk.scrollLeft = 0;
+  syncDom(); fitWidth(); homeView();
 }
 let fileHandle = null; // File System Access handle when the browser allows saving in place
 async function pickFile() {
@@ -1846,7 +1846,10 @@ try { downloadsP = window.claude && window.claude.use ? Promise.race([window.cla
 async function writeHandle(h, bytes) {
   if (h.queryPermission && (await h.queryPermission({ mode: "readwrite" })) !== "granted" &&
       (await h.requestPermission({ mode: "readwrite" })) !== "granted") return false;
-  const w = await h.createWritable(); await w.write(bytes); await w.close(); return true;
+  for (let i = 0; ; i++) { // the file can be briefly locked (automatic save, antivirus, OneDrive): try again a few times
+    try { const w = await h.createWritable(); await w.write(bytes); await w.close(); return true; }
+    catch (e) { if (i >= 4 || (e && e.name === "NotAllowedError")) throw e; await new Promise(r => setTimeout(r, 250 * (i + 1))); }
+  }
 }
 async function download(bytes, name, type = "application/pdf") {
   const dl = await downloadsP;
@@ -1875,7 +1878,9 @@ async function save(mode = "save") {
     }
     if (!window.showSaveFilePicker && mode !== "flat") toast(navigator.brave ? "Brave bloque l'enregistrement dans le fichier d'origine. Activez brave://flags/#file-system-access-api (Enabled), puis relancez Brave." : "Ce navigateur ne permet pas d'enregistrer dans le fichier d'origine. Utilisez Edge ou Chrome (l'app installée).");
     if (mode === "save" && fileHandle) {
-      try { ok = await writeHandle(fileHandle, bytes); } catch (e) { ok = false; }
+      for (let t = 0; fileBusy && t < 50; t++) await new Promise(r => setTimeout(r, 100)); // let a running automatic save finish first
+      fileBusy = true;
+      try { ok = await writeHandle(fileHandle, bytes); } catch (e) { console.warn("save", e); ok = false; } finally { fileBusy = false; }
       if (!ok) toast("Impossible d'écrire dans le fichier d'origine. Utilisez « Enregistrer sous ».");
       if (!ok) return false;
     } else if (mode === "saveas" && window.showSaveFilePicker) {
@@ -2447,7 +2452,7 @@ function switchTab(t, force) {
   scale = t.scale || 1; $("zoomLbl").textContent = Math.round(scale * 100) + " %";
   textCache.clear(); thumbCache.clear(); selection = null; closeFind(); dropViews();
   updateUndo(); if (home) hideHome(true); $("docName").textContent = docName; markDirty();
-  syncDom(); requestAnimationFrame(() => { desk.scrollTop = t.st || 0; desk.scrollLeft = t.sl || 0; updatePageLbl(); });
+  syncDom(); requestAnimationFrame(() => { if (t.st == null) homeView(); else { desk.scrollTop = t.st; desk.scrollLeft = t.sl || 0; } updatePageLbl(); });
   refreshPside(); renderTabs();
 }
 /* ---------- trust screen: explains the browser's "this site can edit the file" warning before it appears ---------- */
@@ -3496,6 +3501,10 @@ function renderPside() {
   endZone.ondrop = e => { e.preventDefault(); e.stopPropagation(); const d = dragPage; dragPage = null; if (d) movePage(d, pages.length); };
   list.appendChild(endZone);
 }
+function homeView() { // top of the first page under the toolbar, centred
+  const go = () => { const el = pagesEl.firstElementChild; if (!el) return; desk.scrollTop = el.offsetTop - 100; desk.scrollLeft = el.offsetLeft + el.offsetWidth / 2 - desk.clientWidth / 2; };
+  go(); requestAnimationFrame(go);
+}
 function goToPage(p) { const v = views.get(p.id); if (v) desk.scrollTop = v.el.offsetTop - 100; setTimeout(() => { updatePageLbl(); if (pside) pside.querySelectorAll(".pt").forEach((x, i) => x.classList.toggle("cur", i === currentPageIndex())); }, 60); }
 $("bPages").onclick = togglePside;
 let lastCur = -1;
@@ -3637,7 +3646,7 @@ document.querySelectorAll("#rSort [data-s]").forEach(b => { b.setAttribute("aria
   document.querySelectorAll("#rSort [data-s]").forEach(x => x.setAttribute("aria-pressed", x === b)); renderHome(); }; });
 let rsT; $("rSearch").oninput = () => { clearTimeout(rsT); rsT = setTimeout(() => { renderHome(); renderWork(); }, 160); };
 function showHome() { ruler.on = false; $("ruler").hidden = true; $("bRuler").setAttribute("aria-pressed", "false"); commitText(); flushRecent(); captureTab(); closeMenu(); closePop(); closeFind(); if (pside) closePside(); $("dirtyDot").hidden = true; selection = null; document.body.classList.add("at-home"); $("home").hidden = false; $("docName").textContent = ""; renderTabs(); setTimeout(renderHome, 500); renderWork(); }
-function hideHome(keep) { document.body.classList.remove("at-home"); $("home").hidden = true; $("docName").textContent = docName; markDirty(); renderTabs(); requestAnimationFrame(() => { clampDock(); if (!keep) { fitWidth(); desk.scrollTop = 0; desk.scrollLeft = 0; } }); }
+function hideHome(keep) { document.body.classList.remove("at-home"); $("home").hidden = true; $("docName").textContent = docName; markDirty(); renderTabs(); requestAnimationFrame(() => { clampDock(); if (!keep) { fitWidth(); homeView(); } }); }
 document.querySelectorAll("[data-start]").forEach(b => b.onclick = async () => {
   const a = b.dataset.start;
   if (a === "open") pickFile();
