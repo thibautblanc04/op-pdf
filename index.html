@@ -183,6 +183,11 @@ body.tool-pen .c-ui,body.tool-hl .c-ui,body.tool-eraser .c-ui,body.tool-shape .c
 body.tool-texthl .c-ui,body.tool-text .c-ui,.tedit{cursor:var(--ibeam)}
 .tedit{position:absolute;z-index:4;margin:0;padding:0;border:0;outline:1.5px dashed var(--accent);outline-offset:3px;background:transparent;resize:none;overflow:hidden;
   font-family:Helvetica,Arial,sans-serif;line-height:1.25;white-space:pre;min-width:2ch;caret-color:var(--accent)}
+.tedit.framed{outline:0}
+.tframe{position:absolute;z-index:3;border:1.5px dashed var(--accent);border-radius:3px;cursor:move;touch-action:none;box-sizing:border-box}
+.tframe::before{content:"";position:absolute;inset:-6px} /* wider grab zone around the dashed line */
+.tframe .tgrip{position:absolute;left:-13px;top:-13px;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:move}
+.tframe .tgrip svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 body.tool-lasso .c-ui{cursor:var(--tool-cursor,crosshair)}
 body.tool-hand .c-ui{cursor:grab}
 body.tool-pointer .c-ui{cursor:var(--arrow)}
@@ -1267,22 +1272,32 @@ function openTextEditor(v, x, y) {
   Object.assign(ta.style, { left: px * scale + "px", top: py * scale + "px", font: fontCss(fo, size * scale), lineHeight: TEXT_LH, color });
   editing = { v, st, ta, x: px, y: py, size, color, ...fo };
   if (st) { v.p.strokes = v.p.strokes.filter(s => s !== st); drawInk(v); }
-  const fit = () => { if (!editing || editing.ta !== ta) return; const E = editing; ta.style.font = fontCss(E, E.size * scale); ta.style.lineHeight = TEXT_LH; ta.style.color = E.color; const m = measureText(ta.value || " ", E.size, E); ta.style.width = (m.w + E.size * .6) * scale + "px"; ta.style.height = m.h * scale + "px"; };
+  const fit = () => { if (!editing || editing.ta !== ta) return; const E = editing; ta.style.font = fontCss(E, E.size * scale); ta.style.lineHeight = TEXT_LH; ta.style.color = E.color; const m = measureText(ta.value || " ", E.size, E); ta.style.width = (m.w + E.size * .6) * scale + "px"; ta.style.height = m.h * scale + "px";
+    const pad = 5; Object.assign(fr.style, { left: E.x * scale - pad + "px", top: E.y * scale - pad + "px", width: (m.w + E.size * .6) * scale + 2 * pad + "px", height: m.h * scale + 2 * pad + "px" }); };
+  // dashed frame + grip: hold and drag to move the text while writing it
+  const fr = document.createElement("div"); fr.className = "tframe"; fr.title = "Maintenir pour déplacer le texte";
+  fr.innerHTML = '<span class="tgrip"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg></span>';
+  ta.classList.add("framed"); editing.fr = fr;
+  let drag = null;
+  fr.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); if (!editing || editing.ta !== ta) return; drag = { sx: e.clientX, sy: e.clientY, x: editing.x, y: editing.y }; try { fr.setPointerCapture(e.pointerId); } catch (err) {} });
+  fr.addEventListener("pointermove", e => { if (!drag || !editing || editing.ta !== ta) return; editing.x = drag.x + (e.clientX - drag.sx) / scale; editing.y = drag.y + (e.clientY - drag.sy) / scale; ta.style.left = editing.x * scale + "px"; ta.style.top = editing.y * scale + "px"; fit(); });
+  const dropF = () => { if (!drag) return; drag = null; ta.focus({ preventScroll: true }); };
+  fr.addEventListener("pointerup", dropF); fr.addEventListener("pointercancel", dropF);
   editing.fit = fit;
   ta.addEventListener("input", fit);
   ta.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); commitText(); } });
   ta.addEventListener("blur", () => setTimeout(() => { if (editing && editing.ta === ta) commitText(); }, 0));
   ta.addEventListener("pointerdown", e => e.stopPropagation());
-  v.el.appendChild(ta); fit();
+  v.el.appendChild(fr); v.el.appendChild(ta); fit();
   setTimeout(() => { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
 }
 function commitText() {
   commitCell();
   if (!editing) return;
-  const { v, st, ta, x, y, size, color, font, b, i } = editing; editing = null;
-  const text = ta.value.replace(/\s+$/, ""); ta.remove();
+  const { v, st, ta, x, y, size, color, font, b, i, fr } = editing; editing = null;
+  const text = ta.value.replace(/\s+$/, ""); ta.remove(); if (fr) fr.remove();
   if (st) v.p.strokes = v.p.strokes.concat([st]); // put the original back so history sees the change
-  const changed = !st ? !!text : (text !== st.text || size !== st.size || color !== st.color || font !== (st.font || "helv") || b !== !!st.b || i !== !!st.i);
+  const changed = !st ? !!text : (text !== st.text || size !== st.size || color !== st.color || font !== (st.font || "helv") || b !== !!st.b || i !== !!st.i || x !== st.x || y !== st.y);
   if (!changed) { drawInk(v); return; }
   pushHistory();
   if (st) v.p.strokes = v.p.strokes.filter(s => s !== st);
