@@ -1176,8 +1176,11 @@ function attachPointer(v) {
         const pr = e.pointerType === "pen" ? (ev.pressure || .5) : .5;
         if (e.shiftKey) { g.st.pts = [P[0], [x, y, pr]]; } else P.push([x, y, pr]);
         if (g.t === "pen" && prefs.shapes && !e.shiftKey) {
-          clearTimeout(g.holdT); const G0 = g;
-          g.holdT = setTimeout(() => { if (g !== G0) return; const r = recognize(G0.st); if (!r) return; G0.st.pts = r.pts; G0.st.shape = r.kind; G0.st.pr = false; drawLive(v, G0.st); }, 650);
+          // hold still to turn the stroke into a shape: small hand tremor (< 5 px) does not restart the wait
+          if (!g.holdAt || Math.hypot(ev.clientX - g.holdAt[0], ev.clientY - g.holdAt[1]) > 5) {
+            g.holdAt = [ev.clientX, ev.clientY]; clearTimeout(g.holdT); const G0 = g;
+            g.holdT = setTimeout(() => { if (g !== G0) return; const r = recognize(G0.st); if (!r) return; G0.st.pts = r.pts; G0.st.shape = r.kind; G0.st.pr = false; drawLive(v, G0.st); }, 320);
+          }
         }
       } else if (g.t === "eraser") eraseAt(v, g, x, y);
       else if (g.t === "lasso") { if (g.rect) { const [ax, ay] = g.rect; g.poly = [[ax, ay], [x, ay], [x, y], [ax, y]]; } else g.poly.push([x, y]); }
